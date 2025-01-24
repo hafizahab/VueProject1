@@ -622,63 +622,95 @@ const addFormData = reactive({
 });
 
 const fetchMachineCodeDD = () => {
-  axios.get('http://172.188.122.62:8085/api/MachineCodeMaster/GetMachineDetailsDDL')
+  // First API call
+  axios.get('http://172.188.122.62:8085/api/MachineCodeMaster/GetMachineDetailsDDL/Production')
     .then(response => {
       const machineCodeData = response.data.result;
-
-      if (Array.isArray(machineCodeData)) {
-        // If it's an array, use the first element or handle multiple machinecode as needed
-        addFormData.machinecode = machineCodeData.length > 0 ? machineCodeData[0].machinecode : '';
-        // Assign the array to addFormData.machinecodedd for rendering options in the dropdown
-        addFormData.machinecodedd = machineCodeData.map(item => item.machinecode);
-        editFormData.machinecode = machineCodeData.length > 0 ? machineCodeData[0].machinecode : '';
-        // Assign the array to addFormData.machinecodedd for rendering options in the dropdown
-        editFormData.machinecodedd = machineCodeData.map(item => item.machinecode);
-      } else if (typeof machineCodeData === 'object') {
-        // If it's an object, use its properties
-        addFormData.machinecode = machineCodeData.machinecode || '';
-        addFormData.machinecodedd = [machineCodeData.machinecode]; // Set an array with a single value
-        editFormData.machinecode = machineCodeData.machinecode || '';
-        editFormData.machinecodedd = [machineCodeData.machinecode]; // Set an array with a single value
-      } else {
-        console.error('Invalid response format for vendor data:', machineCodeData);
-      }
+      handleMachineCodeData(machineCodeData);
     })
     .catch(error => {
-      console.error('Error fetching vendor codes:', error);
+      console.error('Error fetching machine codes from Production:', error);
+    });
+
+  // Second API call
+  axios.get('http://172.188.122.62:8085/api/MachineCodeMaster/GetMachineDetailsDDL/Blending')
+    .then(response => {
+      const machineCodeData = response.data.result;
+      handleMachineCodeData(machineCodeData);
+    })
+    .catch(error => {
+      console.error('Error fetching machine codes from Blending:', error);
     });
 };
+
+// Function to handle machine code data and populate form data
+const handleMachineCodeData = (machineCodeData:any) => {
+  if (Array.isArray(machineCodeData)) {
+    // If it's an array, use the first element or handle multiple machine codes as needed
+    addFormData.machinecode = machineCodeData.length > 0 ? machineCodeData[0].machinecode : '';
+    // Merge the new options with existing ones
+    addFormData.machinecodedd = [...new Set([...addFormData.machinecodedd, ...machineCodeData.map(item => item.machinecode)])];
+    editFormData.machinecode = machineCodeData.length > 0 ? machineCodeData[0].machinecode : '';
+    // Merge the new options with existing ones
+    editFormData.machinecodedd = [...new Set([...editFormData.machinecodedd, ...machineCodeData.map(item => item.machinecode)])];
+  } else if (typeof machineCodeData === 'object') {
+    // If it's an object, use its properties
+    addFormData.machinecode = machineCodeData.machinecode || '';
+    addFormData.machinecodedd.push(machineCodeData.machinecode); // Add the new option
+    editFormData.machinecode = machineCodeData.machinecode || '';
+    editFormData.machinecodedd.push(machineCodeData.machinecode); // Add the new option
+  } else {
+    console.error('Invalid response format for machine code data:', machineCodeData);
+  }
+};
+
 
 const fetchResourceCodeDD = () => {
-  axios.get('http://172.188.122.62:8085/api/ResourceDetails/GetResourceDetailsDDL')
+  // First API call
+  axios.get('http://172.188.122.62:8085/api/ResourceDetails/GetResourceDetailsDDL/Production')
     .then(response => {
       const resourceCodeData = response.data.result;
-
-      if (Array.isArray(resourceCodeData)) {
-        // If it's an array, use the first element or handle multiple resource codes as needed
-        addFormData.resourcecode = resourceCodeData.length > 0 ? resourceCodeData[0].resourcecode : '';
-        // Assign the array to addFormData.resourcecodedd for rendering options in the dropdown
-        addFormData.resourcecodedd = resourceCodeData.map(item => item.resourcecode);
-        editFormData.resourcecode = resourceCodeData.length > 0 ? resourceCodeData[0].resourcecode : '';
-        // Assign the array to editFormData.resourcecodedd for rendering options in the dropdown
-        editFormData.resourcecodedd = resourceCodeData.map(item => item.resourcecode);
-      } else if (typeof resourceCodeData === 'object') {
-        // If it's an object, use its properties
-        addFormData.resourcecode = resourceCodeData.resourcecode || '';
-        addFormData.resourcecodedd = [resourceCodeData.resourcecode]; // Set an array with a single value
-        editFormData.resourcecode = resourceCodeData.resourcecode || '';
-        editFormData.resourcecodedd = [resourceCodeData.resourcecode]; // Set an array with a single value
-      } else {
-        console.error('Invalid response format for resource code data:', resourceCodeData);
-      }
+      handleResourceCodeData(resourceCodeData);
     })
     .catch(error => {
-      console.error('Error fetching resource codes:', error);
+      console.error('Error fetching resource codes from Production:', error);
+    });
+
+  // Second API call
+  axios.get('http://172.188.122.62:8085/api/ResourceDetails/GetResourceDetailsDDL/Blending')
+    .then(response => {
+      const resourceCodeData = response.data.result;
+      handleResourceCodeData(resourceCodeData);
+    })
+    .catch(error => {
+      console.error('Error fetching resource codes from Blending:', error);
     });
 };
 
+// Function to handle resource code data and populate form data
+const handleResourceCodeData = (resourceCodeData:any) => {
+  if (Array.isArray(resourceCodeData)) {
+    // If it's an array, use the first element or handle multiple resource codes as needed
+    addFormData.resourcecode = resourceCodeData.length > 0 ? resourceCodeData[0].resourcecode : '';
+    // Merge the new options with existing ones
+    addFormData.resourcecodedd = [...new Set([...addFormData.resourcecodedd, ...resourceCodeData.map(item => item.resourcecode)])];
+    editFormData.resourcecode = resourceCodeData.length > 0 ? resourceCodeData[0].resourcecode : '';
+    // Merge the new options with existing ones
+    editFormData.resourcecodedd = [...new Set([...editFormData.resourcecodedd, ...resourceCodeData.map(item => item.resourcecode)])];
+  } else if (typeof resourceCodeData === 'object') {
+    // If it's an object, use its properties
+    addFormData.resourcecode = resourceCodeData.resourcecode || '';
+    addFormData.resourcecodedd.push(resourceCodeData.resourcecode); // Add the new option
+    editFormData.resourcecode = resourceCodeData.resourcecode || '';
+    editFormData.resourcecodedd.push(resourceCodeData.resourcecode); // Add the new option
+  } else {
+    console.error('Invalid response format for resource code data:', resourceCodeData);
+  }
+};
+
+
 const fetchShiftDetailsDD = () => { //dont have the api yet
-  axios.get('http://172.188.122.62:8085/api/MachineCodeMaster/GetMachineDetailsDDL')
+  axios.get('http://172.188.122.62:8085/api/MachineCodeMaster/GetMachineDetailsDDL/')
     .then(response => {
       const shiftDetailsData = response.data.result;
 
