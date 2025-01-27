@@ -8,6 +8,7 @@ import { createIcons, icons } from "lucide";
 import { TabulatorFull as Tabulator } from "tabulator-tables";
 import axios from "axios";
 import Swal from 'sweetalert2';
+import LoadingIcon from "../base-components/LoadingIcon";
 
 interface Response {
     id?: string;
@@ -321,7 +322,7 @@ const initTabulator = () => {
                         const viewIcon = document.createElement("i");
                         viewIcon.classList.add("fa-regular", "fa-eye", "pr-2");
                         viewLink.appendChild(viewIcon);
-                        viewLink.appendChild(document.createTextNode("View"));
+                        viewLink.appendChild(document.createTextNode("View & Edit"));
                         container.appendChild(viewLink);
 
                         // Check the status before rendering "Edit" and "Delete" links
@@ -505,25 +506,25 @@ const reInitOnResizeWindow = () => {
 // Filter function
 // Update the onFilter function
 const onFilter = () => {
-  if (tabulator.value) {
-    tabulator.value.setFilter(function (data: any) {
-      // Parse dates from the data object
-      const dateValue = new Date(data.created_date);
-      const startDate = filter.startDate ? new Date(filter.startDate) : null;
-      const endDate = filter.endDate ? new Date(filter.endDate) : null;
+    if (tabulator.value) {
+        tabulator.value.setFilter(function (data: any) {
+            // Parse dates from the data object
+            const dateValue = new Date(data.created_date);
+            const startDate = filter.startDate ? new Date(filter.startDate) : null;
+            const endDate = filter.endDate ? new Date(filter.endDate) : null;
 
-      // Check if the date falls within the specified range or is exactly one of the dates
-      if (!startDate || !endDate) {
-        return true; // Return true if either startDate or endDate is null
-      }
+            // Check if the date falls within the specified range or is exactly one of the dates
+            if (!startDate || !endDate) {
+                return true; // Return true if either startDate or endDate is null
+            }
 
-      const isWithinRange = dateValue >= startDate && dateValue <= endDate;
-      const isStartDate = dateValue.toDateString() === startDate.toDateString();
-      const isEndDate = dateValue.toDateString() === endDate.toDateString();
+            const isWithinRange = dateValue >= startDate && dateValue <= endDate;
+            const isStartDate = dateValue.toDateString() === startDate.toDateString();
+            const isEndDate = dateValue.toDateString() === endDate.toDateString();
 
-      return isWithinRange || isStartDate || isEndDate;
-    });
-  }
+            return isWithinRange || isStartDate || isEndDate;
+        });
+    }
 };
 
 
@@ -553,25 +554,28 @@ const onPrint = () => {
     }
 };
 
-
+const loading = ref(false); // Controls loading animation modal
 
 onMounted(() => {
-    // Fetch data from API
-    axios.get('http://172.188.122.62:8085/api/GRDetails')
-        .then(response => {
-            // Filter out data with status "deleted" and "draft"
-            const filteredData = response.data.result.filter((item: any) => item.status !== 'deleted' && item.status !== 'draft');
+    loading.value = true; // Show loading modal
 
-            // Once data is received, populate the table
+    axios.get('http://10.87.0.33:8082/api/GRDetails')
+        .then(response => {
+            const filteredData = response.data.result.filter((item : any) => item.status !== 'deleted' && item.status !== 'draft');
             console.log(filteredData);
+
             if (tabulator.value) {
                 tabulator.value.setData(filteredData);
             }
         })
         .catch(error => {
             console.error('Error fetching data:', error);
+        })
+        .finally(() => {
+            loading.value = false; // Hide loading modal after data is processed
         });
 
+    // Initialize other required functions
     initTabulator();
     reInitOnResizeWindow();
     fetchGRNumber();
@@ -579,6 +583,7 @@ onMounted(() => {
     fetchUOM();
     fetchWarehouseLocations();
 });
+
 
 
 const editFormData = reactive({
@@ -593,30 +598,26 @@ const editFormData = reactive({
     receivedweight: '',
     actualweight: '',
     warehouselocation: '',
-    powderparticlesize: '', 
-    mv: '', 
-    d10: '', 
-    d50: '', 
-    d90: '', 
-    bulkdensity: '',  
+    powderparticlesize: 'string',
+    mv: 'string',
+    d10: 'string',
+    d50: 'string',
+    d90: 'string',
+    bulkdensity: '',
     status: 'submitted',
     vendorCodes: [] as any[], // Use a separate property for rendering the options in the dropdown
     uoms: [] as string[], // Use a separate property for rendering the options in the dropdown
     warehouseCodes: [] as string[], // Use a separate property for rendering the options in the dropdown
 });
 
-const editRole = (id: string) => {
-    // Fetch data for the specific ID
-    axios.get(`http://172.188.122.62:8085/api/GRDetails/${id}`)
+const editRole = (id : string)  => {
+    loading.value = true; // Start loading animation
+
+    axios.get(`http://10.87.0.33:8082/api/GRDetails/${id}`)
         .then(response => {
             const data = response.data.result;
 
-            // Check if the array has at least one item
             if (data && data.length > 0) {
-                // Log the retrieved data
-                console.log('Retrieved Data:', data);
-
-                // Set data to the editFormData
                 const firstItem = data[0];
                 editFormData.id = firstItem.id;
                 editFormData.grnumber = firstItem.grnumber || '';
@@ -629,22 +630,24 @@ const editRole = (id: string) => {
                 editFormData.receivedweight = firstItem.receivedweight || '';
                 editFormData.actualweight = firstItem.actualweight || '';
                 editFormData.warehouselocation = firstItem.warehouselocation || '';
-                editFormData.powderparticlesize = firstItem.powderparticlesize || '';
-                editFormData.mv = firstItem.mv || '';
-                editFormData.d10 = firstItem.d10 || '';
-                editFormData.d50 = firstItem.d50 || '';
-                editFormData.d90 = firstItem.d90 || '';
+                editFormData.powderparticlesize = firstItem.powderparticlesize || 'string';
+                editFormData.mv = firstItem.mv || 'string';
+                editFormData.d10 = firstItem.d10 || 'string';
+                editFormData.d50 = firstItem.d50 || 'string';
+                editFormData.d90 = firstItem.d90 || 'string';
                 editFormData.bulkdensity = firstItem.bulkdensity || '';
                 editFormData.status = firstItem.status || 'submitted';
 
-                // Open the edit slideover
-                setEditSlideOver(true);
+                setEditSlideOver(true); // Open the edit slideover
             } else {
                 console.error('No data found for the specified ID:', id);
             }
         })
         .catch(error => {
             console.error('Error fetching data for editing:', error);
+        })
+        .finally(() => {
+            loading.value = false; // End loading animation
         });
 };
 
@@ -666,17 +669,13 @@ const viewData = reactive({
 });
 
 const viewRole = (id: string) => {
-    // Fetch data for the specific ID
-    axios.get(`http://172.188.122.62:8085/api/GRDetails/${id}`)
+    loading.value = true; // Start loading animation
+
+    axios.get(`http://10.87.0.33:8082/api/GRDetails/${id}`)
         .then(response => {
             const data = response.data.result;
 
-            // Check if the array has at least one item
             if (data && data.length > 0) {
-                // Log the retrieved data
-                console.log('Retrieved Data:', data);
-
-                // Set data to the viewData
                 const firstItem = data[0];
                 viewData.id = firstItem.id;
                 viewData.grnumber = firstItem.grnumber || '';
@@ -690,14 +689,16 @@ const viewRole = (id: string) => {
                 viewData.warehouselocation = firstItem.warehouselocation || '';
                 viewData.status = firstItem.status || 'submitted';
 
-                // Open the edit slideover
-                setviewModal(true);
+                setviewModal(true); // Open the view modal
             } else {
                 console.error('No data found for the specified ID:', id);
             }
         })
         .catch(error => {
-            console.error('Error fetching data for editing:', error);
+            console.error('Error fetching data for viewing:', error);
+        })
+        .finally(() => {
+            loading.value = false; // End loading animation
         });
 };
 
@@ -724,7 +725,7 @@ const updateRole = (status: 'WHReject' | 'WHApprove') => {
             // Set the status based on the button clicked
             editFormData.status = status;
             // Handle adding or saving a role (PUT request)
-            axios.put(`http://172.188.122.62:8085/api/GRDetails/${editFormData.id}`, {
+            axios.put(`http://10.87.0.33:8082/api/GRDetails/${editFormData.id}`, {
                 grnumber: editFormData.grnumber,
                 powdercode: editFormData.powdercode,
                 vendorcode: editFormData.vendorcode,
@@ -735,6 +736,12 @@ const updateRole = (status: 'WHReject' | 'WHApprove') => {
                 receivedweight: editFormData.receivedweight,
                 actualweight: editFormData.actualweight,
                 warehouselocation: editFormData.warehouselocation,
+                powderparticlesize: editFormData.powderparticlesize,
+                mv: editFormData.mv,
+                d10: editFormData.d10,
+                d50: editFormData.d50,
+                d90: editFormData.d90,
+                bulkdensity: editFormData.bulkdensity,
                 status: editFormData.status,
             })
                 .then(response => {
@@ -742,7 +749,7 @@ const updateRole = (status: 'WHReject' | 'WHApprove') => {
                     setEditSlideOver(false);
 
                     // Refetch filtered data after successful update
-                    axios.get('http://172.188.122.62:8085/api/GRDetails')
+                    axios.get('http://10.87.0.33:8082/api/GRDetails')
                         .then(response => {
                             // Filter out data with status "deleted" and "draft"
                             const filteredData = response.data.result.filter((item: any) => item.status !== 'deleted' && item.status !== 'draft');
@@ -788,18 +795,31 @@ const updateRole = (status: 'WHReject' | 'WHApprove') => {
 
 
 const updateTableData = () => {
-    axios.get(`http://172.188.122.62:8085/api/GRDetails`)
+    loading.value = true; // Show loading modal
+
+    axios.get('http://10.87.0.33:8082/api/GRDetails')
         .then(response => {
-            // Filter out data with status "deleted"
-            const filteredData = response.data.result.filter((item: any) => item.status !== 'deleted');
+            const filteredData = response.data.result.filter((item : any) => item.status !== 'deleted' && item.status !== 'draft');
+            console.log(filteredData);
 
             if (tabulator.value) {
                 tabulator.value.setData(filteredData);
             }
         })
         .catch(error => {
-            console.error('Error fetching updated data:', error);
+            console.error('Error fetching data:', error);
+        })
+        .finally(() => {
+            loading.value = false; // Hide loading modal after data is processed
         });
+
+    // Initialize other required functions
+    initTabulator();
+    reInitOnResizeWindow();
+    fetchGRNumber();
+    fetchVendorCode();
+    fetchUOM();
+    fetchWarehouseLocations();
 };
 
 
@@ -818,6 +838,13 @@ const addFormData = reactive({
     uom: '',
     receivedweight: '',
     warehouselocation: '',
+    actualweight: '',
+    powderparticlesize: 'string',
+    mv: 'string',
+    d10: 'string',
+    d50: 'string',
+    d90: 'string',
+    bulkdensity: 'string',
     status: 'WHApprove',
     vendorCodes: [] as any[], // Use a separate property for rendering the options in the dropdown
     uoms: [] as string[], // Use a separate property for rendering the options in the dropdown
@@ -845,7 +872,7 @@ const addRole = (status: 'draft' | 'submitted') => {
             addFormData.status = status; // Set the status here
 
             // Handle adding or saving a role (POST request)
-            axios.post('http://172.188.122.62:8085/api/GRDetails', {
+            axios.post('http://10.87.0.33:8082/api/GRDetails', {
                 grnumber: addFormData.grnumber,
                 powdercode: addFormData.powdercode,
                 vendorcode: addFormData.vendorcode,
@@ -855,6 +882,13 @@ const addRole = (status: 'draft' | 'submitted') => {
                 uom: addFormData.uom,
                 receivedweight: addFormData.receivedweight,
                 warehouselocation: addFormData.warehouselocation,
+                actualweight: addFormData.actualweight,
+                powderparticlesize: addFormData.powderparticlesize,
+                mv: addFormData.mv,
+                d10: addFormData.d10,
+                d50: addFormData.d50,
+                d90: addFormData.d90,
+                bulkdensity: addFormData.bulkdensity,
                 status: addFormData.status,
             })
                 .then(response => {
@@ -897,7 +931,7 @@ const addRole = (status: 'draft' | 'submitted') => {
 };
 
 const fetchGRNumber = () => {
-    axios.get('http://172.188.122.62:8085/api/GRDetails/GetGRNo')
+    axios.get('http://10.87.0.33:8082/api/GRDetails/GetGRNo')
         .then(response => {
             // Assuming the response body contains the GR number as a string
             addFormData.grnumber = response.data;
@@ -908,7 +942,7 @@ const fetchGRNumber = () => {
 };
 
 const fetchVendorCode = () => {
-    axios.get('http://172.188.122.62:8085/api/VendorMaster/GetVendorDDL')
+    axios.get('http://10.87.0.33:8082/api/VendorMaster/GetVendorDDL')
         .then(response => {
             const vendorData = response.data.result;
 
@@ -937,7 +971,7 @@ const fetchVendorCode = () => {
 
 
 const fetchWarehouseLocations = () => {
-    axios.get('http://172.188.122.62:8085/api/WarehouseLocation/GetWarehouseDDL')
+    axios.get('http://10.87.0.33:8082/api/WarehouseLocation/GetWarehouseDDL')
         .then(response => {
             const warehouseData = response.data.result;
 
@@ -966,7 +1000,7 @@ const fetchWarehouseLocations = () => {
 
 
 const fetchUOM = () => {
-    axios.get('http://172.188.122.62:8085/api/GRDetails/GetUOMDDL')
+    axios.get('http://10.87.0.33:8082/api/GRDetails/GetUOMDDL')
         .then(response => {
             const uomData = response.data.result;
 
@@ -1027,7 +1061,7 @@ const deleteRole = (id: string) => {
     }).then((result) => {
         if (result.isConfirmed) {
             // Make a DELETE request to remove data
-            axios.delete(`http://172.188.122.62:8085/api/GRDetails/${id}`)
+            axios.delete(`http://10.87.0.33:8082/api/GRDetails/${id}`)
                 .then(response => {
                     // After successful deletion, update the table data
                     updateTableData();
@@ -1082,20 +1116,27 @@ const weightDifference = computed(() => {
 
 
 const handleAddClick = (event: MouseEvent) => {
-  event.preventDefault();
-  setAddSlideover(true);
+    event.preventDefault();
+    setAddSlideover(true);
 };
 
 </script>
 
 <template>
+     <!-- Loading Modal Overlay -->
+  <div v-if="loading" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+    <div class="flex flex-col items-center">
+      <LoadingIcon icon="oval" class="w-8 h-8 text-white animate-spin" />
+      <p class="mt-2 text-white text-center text-lg">Loading...</p>
+    </div>
+  </div>
     <div class="flex flex-col items-center mt-8 intro-y sm:flex-row">
         <h2 class="mr-auto text-lg font-medium">Warehouse</h2>
-        <div class="flex w-full mt-4 sm:w-auto sm:mt-0">
+        <!-- <div class="flex w-full mt-4 sm:w-auto sm:mt-0">
             <Button variant="primary" class="mr-2 shadow-md" as="a" href="#" @click="handleAddClick">
                 Add Warehouse
             </Button>
-        </div>
+        </div> -->
     </div>
     <!-- BEGIN: HTML Table Data -->
     <div class="p-5 mt-5 intro-y box mb-10">
@@ -1112,7 +1153,7 @@ const handleAddClick = (event: MouseEvent) => {
                         class="mt-2 sm:w-40 2xl:w-full sm:mt-0" placeholder="Search GR Number..." />
                 </div>
                 <Button id="tabulator-html-filter-go" variant="primary" type="button"
-                class="w-full ml-10 mt-2 mr-2 sm: ml-0 sm:w-16 sm:mt-0 sm:ml-1" @click="onGRNumber">
+                    class="w-full ml-10 mt-2 mr-2 sm: ml-0 sm:w-16 sm:mt-0 sm:ml-1" @click="onGRNumber">
                     GR
                 </Button>
                 <div class="items-center mt-2 sm:flex sm:mr-4 xl:mt-0">
@@ -1154,9 +1195,9 @@ const handleAddClick = (event: MouseEvent) => {
     </div>
     <!-- END: HTML Table Data -->
     <Slideover :open="addSlideover" @close="() => {
-                setAddSlideover(false);
-            }
-                ">
+        setAddSlideover(false);
+    }
+        ">
         <Slideover.Panel>
             <Slideover.Title class="p-5">
                 <h2 class="mr-auto text-base font-medium">
@@ -1209,7 +1250,8 @@ const handleAddClick = (event: MouseEvent) => {
                     </div>
                     <div class="mt-5">
                         <FormLabel htmlFor="regular-form-1">Weight</FormLabel>
-                        <FormInput id="regular-form-1" v-model="addFormData.receivedweight" type="text" placeholder="Weight" />
+                        <FormInput id="regular-form-1" v-model="addFormData.receivedweight" type="text"
+                            placeholder="Weight" />
                     </div>
                     <div class="mt-5">
                         <label for="warehouse-dropdown">Warehouse</label>
@@ -1236,9 +1278,9 @@ const handleAddClick = (event: MouseEvent) => {
             </Slideover.Description>
             <Slideover.Footer>
                 <Button variant="outline-secondary" type="button" @click="() => {
-                setAddSlideover(false);
-            }
-                " class="w-20 mr-1">
+                    setAddSlideover(false);
+                }
+                    " class="w-20 mr-1">
                     Cancel
                 </Button>
 
@@ -1246,9 +1288,9 @@ const handleAddClick = (event: MouseEvent) => {
         </Slideover.Panel>
     </Slideover>
     <Slideover :open="EditSlideOver" @close="() => {
-                setEditSlideOver(false);
-            }
-                ">
+        setEditSlideOver(false);
+    }
+        ">
         <Slideover.Panel>
             <Slideover.Title class="p-5">
                 <h2 class="mr-auto text-base font-medium">
@@ -1260,8 +1302,8 @@ const handleAddClick = (event: MouseEvent) => {
 
                     <div class="mt-5">
                         <FormLabel htmlFor="regular-form-1">Received Weight</FormLabel>
-                        <FormInput id="regular-form-1" v-model="editFormData.receivedweight" type="text" placeholder="Weight"
-                            disabled />
+                        <FormInput id="regular-form-1" v-model="editFormData.receivedweight" type="text"
+                            placeholder="Weight" disabled />
                     </div>
                     <div class="mt-5">
                         <FormLabel htmlFor="actual-weight-form-1">Actual Weight</FormLabel>
@@ -1287,9 +1329,9 @@ const handleAddClick = (event: MouseEvent) => {
             </Slideover.Description>
             <Slideover.Footer>
                 <Button variant="outline-secondary" type="button" @click="() => {
-                setEditSlideOver(false);
-            }
-                " class="w-20 mr-1">
+                    setEditSlideOver(false);
+                }
+                    " class="w-20 mr-1">
                     Cancel
                 </Button>
 
@@ -1300,10 +1342,11 @@ const handleAddClick = (event: MouseEvent) => {
 
 
     <!-- BEGIN: Modal Content -->
-    <Dialog size="lg" :open="viewModal" @close="() => {
-                setviewModal(false);
-            }
-                ">
+    <Dialog
+:staticBackdrop="true" size="lg" :open="viewModal" @close="() => {
+        setviewModal(false);
+    }
+        ">
         <Dialog.Panel>
             <Dialog.Title>
                 <h2 class="mr-auto text-base font-medium">
@@ -1393,16 +1436,16 @@ const handleAddClick = (event: MouseEvent) => {
                                 </th>
                                 <td class="w-[50%] px-auto text-center">
                                     <span :class="{
-                'text-green-700': viewData.status === 'submitted' || viewData.status === 'WHApprove' || viewData.status === 'QCApprove',
-                'text-red-700': viewData.status === 'WHReject' || viewData.status === 'QCReject'
-            }">
+                                        'text-green-700': viewData.status === 'submitted' || viewData.status === 'WHApprove' || viewData.status === 'QCApprove',
+                                        'text-red-700': viewData.status === 'WHReject' || viewData.status === 'QCReject'
+                                    }">
                                         {{
-                viewData.status === 'submitted' ? 'Submitted' :
-                    viewData.status === 'draft' ? 'Draft' :
-                        viewData.status === 'WHApprove' ? 'WH Approved' :
-                            viewData.status === 'WHReject' ? 'WH Rejected' :
-                                viewData.status === 'QCApprove' ? 'QC Approved' :
-                                        viewData.status === 'QCReject' ? 'QC Rejected' : 'Unknown'
+                                            viewData.status === 'submitted' ? 'Submitted' :
+                                                viewData.status === 'draft' ? 'Draft' :
+                                                    viewData.status === 'WHApprove' ? 'WH Approved' :
+                                                        viewData.status === 'WHReject' ? 'WH Rejected' :
+                                                            viewData.status === 'QCApprove' ? 'QC Approved' :
+                                                                viewData.status === 'QCReject' ? 'QC Rejected' : 'Unknown'
                                         }}
                                     </span>
                                 </td>
@@ -1416,9 +1459,9 @@ const handleAddClick = (event: MouseEvent) => {
             </Dialog.Description>
             <Dialog.Footer>
                 <Button type="button" variant="outline-secondary" @click="() => {
-                setviewModal(false);
-            }
-                " class="w-20 mr-1">
+                    setviewModal(false);
+                }
+                    " class="w-20 mr-1">
                     Close
                 </Button>
             </Dialog.Footer>

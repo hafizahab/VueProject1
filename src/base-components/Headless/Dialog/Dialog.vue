@@ -3,7 +3,7 @@ export default {
   inheritAttrs: false,
 };
 
-type Size = "sm" | "md" | "lg" | "xl";
+type Size = "sm" | "md" | "lg" | "xl" | "2xl" | "3xl";
 </script>
 
 <script setup lang="ts">
@@ -29,6 +29,7 @@ const props = withDefaults(defineProps<DialogProps>(), {
   as: "div",
   open: false,
   size: "md",
+  staticBackdrop: false, // Default to false
 });
 
 const { as, onClose, staticBackdrop, size } = props;
@@ -46,9 +47,11 @@ const emit = defineEmits<{
 
 const handleClose = (value: boolean) => {
   if (!staticBackdrop) {
+    // Allow closing if staticBackdrop is false
     onClose && onClose(value);
     emit("close", value);
   } else {
+    // Ignore closing if staticBackdrop is true
     zoom.value = true;
     setTimeout(() => {
       zoom.value = false;
@@ -56,6 +59,7 @@ const handleClose = (value: boolean) => {
   }
 };
 
+// Provide dialog state for children components
 provide<ProvideDialog>("dialog", {
   open: open.value,
   zoom: zoom,
@@ -67,11 +71,9 @@ provide<ProvideDialog>("dialog", {
   <TransitionRoot appear as="template" :show="open">
     <HeadlessDialog
       :as="as"
-      @close="
-        (value) => {
-          handleClose(value);
-        }
-      "
+      @close="(value) => {
+        handleClose(value);
+      }"
       :class="computedClass"
       v-bind="_.omit(attrs, 'class', 'onClose')"
     >

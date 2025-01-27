@@ -32,7 +32,7 @@ const data = computed<ChartData>(() => {
     ],
     datasets: [
       {
-        label: "# of Votes",
+        label: "# of Waste",
         data: [0, 200, 250, 200, 500, 450, 850, 1050, 950, 1100, 900, 1200],
         borderWidth: 2,
         borderColor:

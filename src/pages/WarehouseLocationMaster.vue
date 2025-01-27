@@ -191,7 +191,7 @@ const onFilter = () => {
 
 onMounted(() => {
   // Fetch data from API
-  axios.get('http://172.188.122.62:8085/api/WarehouseLocation')
+  axios.get('http://10.87.0.33:8082/api/WarehouseLocation')
     .then(response => {
       // Filter out data with status "deleted"
       const filteredData = response.data.result.filter((item: any) => item.status !== 'deleted');
@@ -219,7 +219,7 @@ const editFormData = reactive({
 
 const editRole = (id: string) => {
   // Fetch data for the specific ID
-  axios.get(`http://172.188.122.62:8085/api/WarehouseLocation/${id}`)
+  axios.get(`http://10.87.0.33:8082/api/WarehouseLocation/${id}`)
     .then(response => {
       const data = response.data.result;
 
@@ -260,7 +260,7 @@ const updateRole = () => {
   }).then((result) => {
     if (result.isConfirmed) {
       if (editFormData.id) {
-        axios.put(`http://172.188.122.62:8085/api/WarehouseLocation/${editFormData.id}`, {
+        axios.put(`http://10.87.0.33:8082/api/WarehouseLocation/${editFormData.id}`, {
           warehouselocationcode: editFormData.warehouselocationcode,
           warehouselocationname: editFormData.warehouselocationname,
           status: editFormData.status,
@@ -305,7 +305,7 @@ const updateRole = () => {
 };
 
 const updateTableData = () => {
-  axios.get(`http://172.188.122.62:8085/api/WarehouseLocation`)
+  axios.get(`http://10.87.0.33:8082/api/WarehouseLocation`)
     .then(response => {
       // Filter out data with status "deleted"
       const filteredData = response.data.result.filter((item: any) => item.status !== 'deleted');
@@ -347,7 +347,7 @@ const addRole = () => {
     // If the user confirms, proceed with adding the role
     if (result.isConfirmed) {
       // Handle adding a new role (POST request)
-      axios.post('http://172.188.122.62:8085/api/WarehouseLocation', {
+      axios.post('http://10.87.0.33:8082/api/WarehouseLocation', {
         warehouselocationcode: addFormData.warehouselocationcode,
         warehouselocationname: addFormData.warehouselocationname,
         status: addFormData.status,
@@ -405,7 +405,7 @@ const deleteRole = (id: string) => {
   }).then((result) => {
     if (result.isConfirmed) {
       // Make a DELETE request to remove data
-      axios.delete(`http://172.188.122.62:8085/api/WarehouseLocation/${id}`)
+      axios.delete(`http://10.87.0.33:8082/api/WarehouseLocation/${id}`)
         .then(response => {
           // After successful deletion, update the table data
           updateTableData();

@@ -14,7 +14,7 @@ const props = defineProps<{
 const colorScheme = computed(() => useColorSchemeStore().colorScheme);
 const darkMode = computed(() => useDarkModeStore().darkMode);
 
-const chartData = [15, 10, 65];
+const chartData = [30, 20, 50];
 const chartColors = () => [
   getColor("pending", 0.9),
   getColor("warning", 0.9),

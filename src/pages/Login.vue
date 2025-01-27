@@ -8,136 +8,226 @@ import Button from "../base-components/Button";
 import Swal from 'sweetalert2';
 import Toastify from "toastify-js";
 import axios from 'axios';
-import { ref } from 'vue';
+import { ref, reactive } from 'vue';
 import { useRouter } from 'vue-router';
+import logoULrl1 from "../../assets/images/login-img.png";
+import { useSideMenuStore } from '../stores/side-menu';
+import loginImg from "../assets/images/login-img.jpg";
 
-const email = ref('');
-const password = ref('');
-const emailError = ref('');
-const passwordError = ref('');
+
 const router = useRouter();
 
+const sideMenuStore = useSideMenuStore();
 
-const validateEmail = () => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!email.value.trim() || !emailRegex.test(email.value)) {
-    emailError.value = 'Please enter a valid email address';
-  } else {
-    emailError.value = '';
+const addFormData = reactive({
+  email: '',
+  password: '',
+});
+
+// API Base URL
+const API_BASE_URL = 'http://10.87.0.33:8082/api/Security/login/';
+const USER_MASTER_API_URL = 'http://10.87.0.33:8082/api/UserMaster';
+
+const formSubmitted = ref(false);
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const login = async () => {
+  formSubmitted.value = true;
+
+  if (formSubmitted.value && (!addFormData.password || !emailPattern.test(addFormData.email))) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Please complete the field',
+      showConfirmButton: false,
+      showCloseButton: true,
+      timer: 5000,
+      timerProgressBar: true,
+      position: 'top-end',
+      iconColor: 'red',
+      toast: true,
+      background: '#fff',
+      showClass: {
+        popup: 'animate__animated animate__fadeInUp',
+      },
+      hideClass: {
+        popup: 'animate__animated animate__fadeOutUp',
+      },
+    });
+    return;
   }
-};
 
-const validatePassword = () => {
-  if (!password.value.trim()) {
-    passwordError.value = 'Password is required.';
-  } else if (password.value.length < 6) {
-    passwordError.value = 'Password must be at least 6 characters long.';
-  } else {
-    passwordError.value = '';
-  }
-};
+  try {
+    // Fetch user data from the UserMaster API
+    const userResponse = await axios.get(USER_MASTER_API_URL);
+    const users = userResponse.data.result;
 
-const loginUser = async () => {
-  validateEmail();
-  validatePassword();
+    // Find user based on email
+    const user = users.find(
+      (u: any) =>
+        u.emailId === addFormData.email &&
+        u.status === 'active' // Ensure user is active
+    );
 
-  if (!emailError.value && !passwordError.value) {
-    try {
-      // Retrieve the user data
-      const response = await axios.get(`https://65fa88953909a9a65b1a9b2e.mockapi.io/login/users`);
-      const users = response.data;
+    // Check if user exists and simulate password match (assuming addFormData.password is hashed appropriately)
+    if (user /* && user.password === hashFunction(addFormData.password) */) {
+      // Simulate the login success response
+      const response = {
+        data: {
+          statusCode: 200,
+          message: 'Success!',
+          result: {
+            userId: user.id,
+            authToken: 'fake-auth-token', // Normally, you'd get this from the server
+            changePasswordRequired: false,
+            expiresIn: 3600,
+            firstName: user.firstName,
+          },
+        },
+      };
 
-      const user = users.find(u => u.email === email.value && u.password === password.value);
+      // Check if response data is structured correctly
+      if (response.data.statusCode === 200 && response.data.message === 'Success!' && response.data.result) {
+        const { userId, authToken, changePasswordRequired, expiresIn, firstName } = response.data.result;
+        const tokenExpiry = Date.now() + expiresIn * 1000; // expiresIn is assumed to be in seconds
 
-      if (user) {
-        // Handle successful login, e.g., update state or redirect
-        console.log('Successfully logged in. User:', user);
-        localStorage.setItem('token', JSON.stringify(user.token));
-        localStorage.setItem('user', JSON.stringify(user));
+        localStorage.setItem('userId', userId);
+        localStorage.setItem('authToken', authToken);
+        localStorage.setItem('tokenExpiry', tokenExpiry.toString());
+        localStorage.setItem('firstName', firstName); // Save the first name
 
-        // Redirect based on user type
-        switch (user.user_type) {
-          case 'admin':
-            router.push('/role-master');
-            break;
-          case 'gruser':
-            router.push('/good-receiving/good-receiving');
-            break;
-          case 'whuser':
-            router.push('/warehouse/warehouse');
-            break;
-          case 'qcuser':
-            router.push('/quality-check/quality-check');
-            break;
-          default:
-            console.error('Unknown user type:', user.user_type);
-            break;
-        }
+        const nextPage = changePasswordRequired ? '/change-password' : '/landing-page';
+
+        // Fetch user access data
+        const accessResponse = await axios.get('http://10.87.0.33:8082/api/UserAccessManagement');
+        console.log("Fetched User Access Data:", accessResponse.data);
+        localStorage.setItem('userAccess', JSON.stringify(accessResponse.data));
+
+        // Update the side menu store
+        sideMenuStore.updateMenu();
+
+        router.push(nextPage).then(() => {
+          Swal.fire({
+            icon: changePasswordRequired ? 'warning' : 'success',
+            title: changePasswordRequired ? 'Please Change Your Password' : 'Successfully Logged In',
+            showConfirmButton: false,
+            showCloseButton: true,
+            timer: 5000,
+            timerProgressBar: true,
+            position: 'top-end',
+            iconColor: changePasswordRequired ? '#ffb703' : 'green',
+            toast: true,
+            background: '#fff',
+            showClass: {
+              popup: 'animate__animated animate__fadeInUp',
+            },
+            hideClass: {
+              popup: 'animate__animated animate__fadeOutUp',
+            },
+          });
+        });
       } else {
-        console.error('Login failed: Invalid email or password');
-        // Handle invalid credentials
-        emailError.value = 'Invalid email or password';
+        Swal.fire({
+          icon: 'error',
+          title: 'Login Failed',
+          text: 'Invalid login credentials, please try again.',
+          showConfirmButton: true,
+          confirmButtonText: 'Try Again',
+          confirmButtonColor: '#d33',
+        });
       }
-    } catch (error) {
-      console.error('Login failed: Invalid credentials', error);
-      const failedEl = document
-      .querySelectorAll("#failed-notification-content")[0]
-      .cloneNode(true) as HTMLElement;
-    failedEl.classList.remove("hidden");
-    Toastify({
-      node: failedEl,
-      duration: 3000,
-      newWindow: true,
-      close: true,
-      gravity: "top",
-      position: "right",
-      stopOnFocus: true,
-    }).showToast()
+    } else {
+      Swal.fire({
+        icon: 'error',
+        title: 'User not found or inactive',
+        text: 'Please verify your email, password and try again.',
+        showConfirmButton: true,
+        confirmButtonText: 'Try Again',
+        confirmButtonColor: '#d33',
+      });
     }
+
+    formSubmitted.value = false;
+
+  } catch (error) {
+    handleError(error, 'Error during login');
+  } finally {
+    formSubmitted.value = false; // reset form submission state
   }
 };
+
+
+
+
+
+// Utility function for error handling
+const handleError = (error: any, message: any) => {
+  console.error(message, error);
+  Swal.fire({
+    icon: 'error',
+    title: 'Operation Failed',
+    text: message,
+  });
+};
+
 </script>
 
 <template>
-  <div class="py-16">
-    <div class="flex bg-white rounded-lg shadow-lg overflow-hidden mx-auto max-w-sm lg:max-w-[70%]">
+  <div class="min-h-screen flex items-center justify-center py-6 bg-blue-900">
+    <div class="p-10 flex bg-white rounded-lg shadow-lg overflow-hidden mx-auto w-full max-w-md lg:max-w-4xl">
+      <div class="rounded hidden lg:block lg:w-1/2 bg-cover" :style="{ backgroundImage: `url(${loginImg})` }"></div>
 
-      <div class="hidden bg-white shadow-md border border-gray-100 border-r-1 lg:block lg:w-1/2 bg-cover">
-        
-        <img
-          src="https://img.freepik.com/free-photo/corporate-business-handshake-business-partners_53876-104764.jpg?t=st=1709192957~exp=1709196557~hmac=33739e88726addfdb75577feb35ef9cfcd367b6af6467cf1bc63fda0d77e6ddd&w=740"
-          width="450" class="mt-10 mb-10 ml-8 rounded-lg">
-
-      </div>
       <div class="w-full p-8 lg:w-1/2">
-        <img src="https://vectorseek.com/wp-content/uploads/2023/12/Porex-Filtration-Group-Logo-Vector.svg-.png"
-          width="200" class="m-5">
-        <div class="mt-10 flex flex-col items-center">
-          
-          <h1 class="text-2xl mb-10 xl:text-3xl font-extrabold ">
-            Login
-          </h1>
-          <div class="w-full flex-1 mt-8">
-
-            <div class="mx-auto max-w-xs">
-            
-              <div class="mt-8 intro-x">
-              <FormInput type="text" v-model="email" @input="validateEmail"
-                class="block px-4 py-3 intro-x login__input min-w-full xl:min-w-[350px]" placeholder="Email" />
-              <div id="email-error" class="text-xs text-red-500 mt-1">{{ emailError }}</div>
-
-              <FormInput type="password" v-model="password" @input="validatePassword"
-                class="block px-4 py-3 mt-4 intro-x login__input min-w-full xl:min-w-[350px]" placeholder="Password" />
-              <div id="password-error" class="text-xs text-red-500 mt-1">{{ passwordError }}</div>
-            </div>
-
-             
-            <Button @click="loginUser" variant="primary" class="w-full px-4 py-3 align-top xl:w-32 xl:mr-3">
-                Login
-              </Button>
-            </div>
+        <h2 class="text-2xl font-semibold text-blue-700 text-center">Porex RMC</h2>
+        <p class="text-xl text-gray-600 text-center">Welcome back!</p>
+        <hr class="mt-5 mb-5">
+        <form @submit.prevent="login">
+          <div class="mt-4">
+            <FormLabel htmlFor="email" class="font-bold">Email</FormLabel><span
+              class="text-red-500 pl-1 text-md">*</span>
+            <FormInput :class="{ 'border-red-500': formSubmitted && !emailPattern.test(addFormData.email) }"
+              v-model="addFormData.email" id="email" type="email" placeholder="Your Email" />
+            <span v-if="formSubmitted && !addFormData.email" class="text-red-500">Email is required!</span>
+            <span v-if="formSubmitted && addFormData.email && !emailPattern.test(addFormData.email)"
+              class="text-red-500">Please enter a valid email address!</span>
           </div>
+          <div class="mt-4">
+            <div class="flex justify-between">
+              <div>
+                <FormLabel htmlFor="regular-form-1" class="font-bold">Password</FormLabel><span
+                  class="text-red-500 pl-1 text-md">*</span>
+              </div>
+              <router-link to="/forget-password" class="text-xs text-gray-500 hover">Forget Password?</router-link>
+
+            </div>
+            <FormInput :class="{ 'border-red-500': formSubmitted && !addFormData.password }"
+              v-model="addFormData.password" id="password" type="password" placeholder="Password" />
+            <span v-if="formSubmitted && !addFormData.password" class="text-red-500">Password is required!</span>
+          </div>
+          <div class="mt-8">
+            <button
+              class="bg-blue-700 text-white text-md font-bold py-3 px-4 w-full rounded-md hover:bg-blue-800 transition duration-300 ease-in-out">
+              <i class="pr-3 fa-solid fa-arrow-right-to-bracket"></i>Login
+            </button>
+
+
+          </div>
+        </form>
+        <div class="mt-4 flex items-center justify-between">
+          <span class="border-b w-1/5 md:w-1/4"></span>
+          <router-link to="/user-registration" class="text-xs text-gray-500 uppercase"><b class="hover">CREATE AN
+              ACCOUNT</b></router-link>
+          <span class="border-b w-1/5 md:w-1/4"></span>
         </div>
       </div>
     </div>
-  </div></template>
+  </div>
+</template>
+<style scoped>
+.hover {
+  transition: color 0.3s ease, text-decoration 0.3s ease;
+}
+
+.hover:hover {
+  color: rgb(10, 10, 162);
+}
+</style>

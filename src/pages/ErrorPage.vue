@@ -3,13 +3,21 @@ import DarkModeSwitcher from "../components/DarkModeSwitcher";
 import MainColorSwitcher from "../components/MainColorSwitcher";
 import errorIllustration from "../assets/images/error-illustration.svg";
 import Button from "../base-components/Button";
+
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
+
+const goBackToHome = () => {
+  router.push({ name: 'side-menu-landing-page' });
+};
 </script>
 
 <template>
-  <div class="py-2">
+  <div class="py-2 bg-primary">
     <DarkModeSwitcher />
     <MainColorSwitcher />
-    <div class="container">
+    <div class="container ">
       <!-- BEGIN: Error Page -->
       <div
         class="flex flex-col items-center justify-center h-screen text-center error-page lg:flex-row lg:text-left"
@@ -22,19 +30,20 @@ import Button from "../base-components/Button";
           />
         </div>
         <div class="mt-10 text-white lg:mt-0">
-          <div class="font-medium intro-x text-8xl">404</div>
-          <div class="mt-5 text-xl font-medium intro-x lg:text-3xl">
-            Oops. This page has gone missing.
-          </div>
-          <div class="mt-3 text-lg intro-x">
-            You may have mistyped the address or the page may have moved.
-          </div>
-          <Button
-            class="px-4 py-3 mt-10 text-white border-white intro-x dark:border-darkmode-400 dark:text-slate-200"
-          >
-            Back to Home
-          </Button>
-        </div>
+  <div class="font-medium intro-x text-8xl">403</div>
+  <div class="mt-5 text-xl font-medium intro-x lg:text-3xl">
+    Access Denied
+  </div>
+  <div class="mt-3 text-lg intro-x">
+    You do not have permission to view this page. If you believe this is a mistake, please contact the administrator for access.
+  </div>
+  <Button
+    class="px-4 py-3 mt-10 text-white border-white intro-x dark:border-darkmode-400 dark:text-slate-200"
+    @click="goBackToHome"
+  >
+    Back to Home
+  </Button>
+</div>
       </div>
       <!-- END: Error Page -->
     </div>

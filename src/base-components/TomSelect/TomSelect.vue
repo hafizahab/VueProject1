@@ -39,27 +39,19 @@ const computedOptions = computed(() => {
   };
 
   if (Array.isArray(props.modelValue)) {
-    options = {
-      persist: false,
-      create: true,
-      onDelete: function (values: string[]) {
-        return confirm(
-          values.length > 1
-            ? "Are you sure you want to remove these " +
-                values.length +
-                " items?"
-            : 'Are you sure you want to remove "' + values[0] + '"?'
-        );
+  options = {
+    persist: false,
+    create: true,
+    ...options,
+    plugins: {
+      remove_button: {
+        title: "Remove this item",
       },
-      ...options,
-      plugins: {
-        remove_button: {
-          title: "Remove this item",
-        },
-        ...options.plugins,
-      },
-    };
-  }
+      ...options.plugins,
+    },
+  };
+}
+
 
   return options;
 });

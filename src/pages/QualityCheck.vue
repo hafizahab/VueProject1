@@ -2,1437 +2,2835 @@
 import Lucide from "../base-components/Lucide";
 import { Menu, Slideover, Dialog } from "../base-components/Headless";
 import Button from "../base-components/Button";
-import { FormInput, FormSelect, FormLabel, FormTextarea } from "../base-components/Form";
-import { onMounted, ref, reactive, computed } from "vue";
+import { FormInput, FormSelect, FormLabel, FormTextarea, FormCheck } from "../base-components/Form";
+import { onMounted, ref, reactive, computed, watch } from "vue";
 import { createIcons, icons } from "lucide";
 import { TabulatorFull as Tabulator } from "tabulator-tables";
 import axios from "axios";
 import Swal from 'sweetalert2';
+import printJS from 'print-js';
+import LoadingIcon from "../base-components/LoadingIcon";
+
+
+interface UserAccess {
+    userId: string;
+    goodsReceive?: string[];
+}
+
+let cachedUserAccess: UserAccess[] | null = null; // Use null initially to indicate no data is cached
+
+function getUserAccessData(): Promise<UserAccess[]> {
+    return new Promise((resolve, reject) => {
+        if (cachedUserAccess) {
+            resolve(cachedUserAccess);
+        } else {
+            loading.value = true; // Show the loading modal
+            fetch('http://10.87.0.33:8082/api/UserAccessManagement')
+                .then((response) => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then((data) => {
+                    // Ensure the data structure matches expectations
+                    if (data && Array.isArray(data.result)) {
+                        cachedUserAccess = data.result as UserAccess[]; // Explicitly cast data.result
+                        resolve(cachedUserAccess);
+                    } else {
+                        throw new Error("Unexpected response format");
+                    }
+                })
+                .catch((error) => reject(error))
+                .finally(() => {
+                    loading.value = false; // Hide the loading modal
+                });
+        }
+    });
+}
 
 interface Response {
-    id?: string;
-    grnumber?: string;
-    powdercode?: string;
-    vendorcode?: string;
-    ponumber?: string;
-    lotnumber?: string;
-    gross?: string;
-    uom?: string;
-    weight?: string;
-    warehouselocation?: string;
-    status?: string;
-    created_date?: string;
+  id?: string;
+  grnumber?: string;
+  productcode?: string;
+  date?: string;
+  resourcecode?: string;
+  shift?: string;
+  vendorname?: string;
+  vendorcode?: string;
+  ponumber?: string;
+  lotnumber?: string;
+  nett?: string;
+  gross?: string;
+  uom?: string;
+  qcrequired?: any;
+  status?: string;
+  receiveStatus?: string;
 }
 
 const tableRef = ref<HTMLDivElement>();
 const tabulator = ref<Tabulator>();
 const filter = reactive({
-    field: "name",
-    type: "like",
-    value: "",
-    id: "",
-    grnumber: "",
-    startDate: null,
-    endDate: null,
+  field: "name",
+  type: "like",
+  value: "",
+  ponumber: "",
+  productcode: "",
+  status: "",
+  startDate: null,
+  endDate: null,
 });
 const setFilter = (value: typeof filter) => {
-    Object.assign(filter, value);
+  Object.assign(filter, value);
 };
 
 const initTabulator = () => {
-    if (tableRef.value) {
-        tabulator.value = new Tabulator(tableRef.value, {
-            paginationMode: "local",
-            filterMode: "local",
-            sortMode: "local",
-            printAsHtml: true,
-            printStyled: true,
-            pagination: true,
-            paginationSize: 10,
-            paginationSizeSelector: [5, 10, 20, 30, 40],
-            layout: "fitColumns",
-            responsiveLayout: "collapse",
-            placeholder: "No matching records found",
-
-            columns: [
-                {
-                    title: "",
-                    formatter: "responsiveCollapse",
-                    width: 40,
-                    minWidth: 30,
-                    hozAlign: "center",
-                    resizable: false,
-                    headerSort: false,
-                },
-                {
-                    title: "ID",
-                    minWidth: 200,
-                    responsive: 0,
-                    field: "id",
-                    vertAlign: "middle",
-                    print: false,
-                    download: false,
-                    visible: false,
-                    formatter(cell) {
-                        const response: Response = cell.getData();
-                        return `<div>
+  if (tableRef.value) {
+    tabulator.value = new Tabulator(tableRef.value, {
+      paginationMode: "local",
+      filterMode: "local",
+      sortMode: "local",
+      printAsHtml: true,
+      printStyled: true,
+      pagination: true,
+      paginationSize: 10,
+      paginationSizeSelector: [5, 10, 20, 30, 40, true],
+      layout: "fitColumns",
+      responsiveLayout: "collapse",
+      placeholder: "No matching records found",
+       // Add a title at the top of the print view
+       printHeader: `
+                <h1 style="text-align: center; font-size: 20px; margin-bottom: 20px;">
+                    Quality Check
+                </h1>
+            `,
+      columns: [
+        {
+          title: "",
+          formatter: "responsiveCollapse",
+          width: 40,
+          minWidth: 30,
+          hozAlign: "center",
+          resizable: false,
+          headerSort: false,
+        },
+        {
+          title: "",
+          formatter: "responsiveCollapse",
+          width: 40,
+          minWidth: 30,
+          hozAlign: "center",
+          resizable: false,
+          headerSort: false,
+        },
+        {
+          title: "ID",
+          minWidth: 200,
+          responsive: 0,
+          field: "id",
+          vertAlign: "middle",
+          print: false,
+          download: false,
+          visible: false,
+          formatter(cell) {
+            const response: Response = cell.getData();
+            return `<div>
                 <div class="font-medium whitespace-nowrap">${response.id}</div>
               </div>`;
-                    },
-                },
-                {
-                    title: "Date",
-                    minWidth: 200,
-                    responsive: 0,
-                    field: "created_date",
-                    vertAlign: "middle",
-                    print: false,
-                    download: false,
-                    visible: false,
-                    formatter(cell) {
-                        const response = cell.getData();
-                        const fullDate = new Date(response.created_date);
-
-                        // Extracting date components
-                        const year = fullDate.getFullYear();
-                        const month = String(fullDate.getMonth() + 1).padStart(2, '0');
-                        const day = String(fullDate.getDate()).padStart(2, '0');
-
-                        // Formatted date string
-                        const formattedDate = `${year}-${month}-${day}`;
-
-                        return `<div>
-        <div class="font-medium whitespace-nowrap">${formattedDate}</div>
-      </div>`;
-                    },
-                },
-                {
-                    title: "GR NUMBER",
-                    minWidth: 150,
-                    responsive: 0,
-                    field: "grnumber",
-                    vertAlign: "middle",
-                    print: false,
-                    download: false,
-                    formatter(cell) {
-                        const response: Response = cell.getData();
-                        return `<div>
-                <div class="font-medium whitespace-nowrap">${response.grnumber}</div>
-              </div>`;
-                    },
-                },
-                {
-                    title: "POWDER CODE",
-                    minWidth: 150,
-                    responsive: 0,
-                    field: "powdercode",
-                    vertAlign: "middle",
-                    print: false,
-                    download: false,
-                    formatter(cell) {
-                        const response: Response = cell.getData();
-                        return `<div>
-                <div class="font-medium whitespace-nowrap">${response.powdercode}</div>
-              </div>`;
-                    },
-                },
-                {
-                    title: "VENDOR CODE",
-                    minWidth: 150,
-                    responsive: 0,
-                    field: "vendorcode",
-                    vertAlign: "middle",
-                    print: false,
-                    download: false,
-                    formatter(cell) {
-                        const response: Response = cell.getData();
-                        return `<div>
-                <div class="font-medium whitespace-nowrap">${response.vendorcode}</div>
-              </div>`;
-                    },
-                },
-                {
-                    title: "PO NUMBER",
-                    minWidth: 150,
-                    responsive: 0,
-                    field: "ponumber",
-                    vertAlign: "middle",
-                    print: false,
-                    download: false,
-                    formatter(cell) {
-                        const response: Response = cell.getData();
-                        return `<div>
+          },
+        },
+        {
+          title: "PO NUMBER",
+          minWidth: 150,
+          responsive: 0,
+          field: "ponumber",
+          vertAlign: "middle",
+          print: false,
+          download: false,
+          formatter(cell) {
+            const response: Response = cell.getData();
+            return `<div>
                 <div class="font-medium whitespace-nowrap">${response.ponumber}</div>
               </div>`;
-                    },
-                },
-                {
-                    title: "LOT NUMBER",
-                    minWidth: 200,
-                    responsive: 0,
-                    field: "lotnumber",
-                    vertAlign: "middle",
-                    print: false,
-                    download: false,
-                    visible: false,
-                    formatter(cell) {
-                        const response: Response = cell.getData();
-                        return `<div>
-                <div class="font-medium whitespace-nowrap">${response.lotnumber}</div>
+          },
+        },
+        {
+          title: "GR NUMBER",
+          minWidth: 150,
+          responsive: 0,
+          field: "grnumber",
+          vertAlign: "middle",
+          print: false,
+          download: false,
+          formatter(cell) {
+            const response: Response = cell.getData();
+            return `<div>
+                <div class="font-medium whitespace-nowrap">${response.grnumber}</div>
               </div>`;
-                    },
-                },
-                {
-                    title: "GROSS",
-                    minWidth: 150,
-                    responsive: 0,
-                    field: "gross",
-                    vertAlign: "middle",
-                    print: false,
-                    download: false,
-                    visible: false,
-                    formatter(cell) {
-                        const response: Response = cell.getData();
-                        return `<div>
-                <div class="font-medium whitespace-nowrap">${response.gross}</div>
+          },
+        },
+        {
+          title: "PART NUMBER",
+          minWidth: 150,
+          responsive: 0,
+          field: "productcode",
+          vertAlign: "middle",
+          print: false,
+          download: false,
+          formatter(cell) {
+            const response: Response = cell.getData();
+            return `<div>
+                <div class="font-medium whitespace-nowrap">${response.productcode}</div>
               </div>`;
-                    },
-                },
-                {
-                    title: "UOM",
-                    minWidth: 150,
-                    responsive: 0,
-                    field: "uom",
-                    vertAlign: "middle",
-                    print: false,
-                    download: false,
-                    visible: false,
-                    formatter(cell) {
-                        const response: Response = cell.getData();
-                        return `<div>
-                <div class="font-medium whitespace-nowrap">${response.uom}</div>
-              </div>`;
-                    },
-                },
-                {
-                    title: "WEIGHT",
-                    minWidth: 150,
-                    responsive: 0,
-                    field: "weight",
-                    vertAlign: "middle",
-                    print: false,
-                    download: false,
-                    visible: false,
-                    formatter(cell) {
-                        const response: Response = cell.getData();
-                        return `<div>
-                <div class="font-medium whitespace-nowrap">${response.weight}</div>
-              </div>`;
-                    },
-                },
-                {
-                    title: "WAREHOUSE LOCATION",
-                    minWidth: 200,
-                    responsive: 0,
-                    field: "warehouselocation",
-                    vertAlign: "middle",
-                    print: false,
-                    download: false,
-                    visible: false,
-                    formatter(cell) {
-                        const response: Response = cell.getData();
-                        return `<div>
-                <div class="font-medium whitespace-nowrap">${response.warehouselocation}</div>
-              </div>`;
-                    },
-                },
-                {
-                    title: "STATUS",
-                    minWidth: 100,
-                    field: "status",
-                    hozAlign: "center",
-                    headerHozAlign: "center",
-                    vertAlign: "middle",
-                    print: false,
-                    download: false,
-                    formatter: function (cell, formatterParams, onRendered) {
-                        const status = cell.getValue();
-                        let statusClass = '';
-                        let statusText = '';
+          },
+        },
+        {
+          title: "Date",
+          minWidth: 200,
+          responsive: 0,
+          field: "date",
+          vertAlign: "middle",
+          print: false,
+          visible: false,
+          download: false,
+          formatter(cell) {
+            const response = cell.getData();
+            const fullDate = new Date(response.date);
 
-                        switch (status) {
-                            case 'submitted':
-                                statusClass = 'bg-green-100 text-green-800 border-green-400';
-                                statusText = 'Submitted';
-                                break;
-                            case 'draft':
-                                statusClass = 'bg-yellow-100 text-yellow-800 border-yellow-700';
-                                statusText = 'Draft';
-                                break;
-                            case 'WHApprove':
-                                statusClass = 'bg-green-100 text-green-800 border-green-400';
-                                statusText = 'WH Approved';
-                                break;
-                            case 'WHReject':
-                                statusClass = 'bg-red-100 text-red-800 border-red-400';
-                                statusText = 'WH Reject';
-                                break;
-                            case 'QCApprove':
-                                statusClass = 'bg-green-100 text-green-800 border-green-400';
-                                statusText = 'QC Approved';
-                                break;
-                            case 'QCReject':
-                                statusClass = 'bg-red-100 text-red-800 border-red-400';
-                                statusText = 'QC Rejected';
-                                break;
-                            default:
-                                statusClass = 'bg-gray-100 text-gray-800';
-                                statusText = 'Unknown';
-                        }
+            // Extracting date components
+            const year = fullDate.getFullYear();
+            const month = String(fullDate.getMonth() + 1).padStart(2, '0');
+            const day = String(fullDate.getDate()).padStart(2, '0');
+            const hours = String(fullDate.getHours()).padStart(2, '0');
+            const minutes = String(fullDate.getMinutes()).padStart(2, '0');
+            const seconds = String(fullDate.getSeconds()).padStart(2, '0');
+            const meridian = (fullDate.getHours() < 12) ? 'AM' : 'PM';
 
-                        return `<div class="flex items-center lg:justify-center ${statusClass} text-xs font-medium me-2 px-2.5 py-0.5 rounded dark:bg-gray-700 dark:${status === 'submitted' ? 'text-green-400' : 'text-yellow-400'} border">
-      ${statusText}
+            // Formatted date string
+            const formattedDate = `${day}/${month}/${year} ${hours}:${minutes}:${seconds} ${meridian}`;
+
+            return `<div>
+        <div class="font-medium whitespace-nowrap">${formattedDate}</div>
     </div>`;
-                    },
-                },
-                {
-                    title: "ACTIONS",
-                    minWidth: 150,
-                    field: "actions",
-                    responsive: 1,
-                    hozAlign: "center",
-                    headerHozAlign: "center",
-                    vertAlign: "middle",
-                    print: false,
-                    download: false,
-                    formatter(cell) {
-                        const container = document.createElement("div");
-                        container.classList.add("flex", "lg:justify-center", "flex-col"); // Added flex-col class for vertical stacking
+          },
+        },
+        {
+          title: "STATUS",
+          minWidth: 150,
+          responsive: 0,
+          field: "status",
+          vertAlign: "middle",
+          print: false,
+          download: false,
+          sorter: (a, b, aRow, bRow, column, dir, sorterParams) => {
+            // Custom sorter to prioritize 'Pending QC'
+            if (a === 'Pending QC' && b !== 'Pending QC') return -1;
+            if (a !== 'Pending QC' && b === 'Pending QC') return 1;
+            return 0;
+          },
+          formatter: function (cell, formatterParams, onRendered) {
+            let status = cell.getValue();
+            let statusClass = '';
 
-                        const response = cell.getData();
-                        const viewLink = document.createElement("a");
-                        viewLink.classList.add("flex", "items-center", "mr-3");
-                        viewLink.href = "#";
-                        viewLink.addEventListener("click", (event) => {
-                            event.preventDefault();
-                            viewRole(response.id);
-                        });
+            if (!status) {
+              status = 'N/A';
+              statusClass = 'bg-gray-100 text-gray-800 border-gray-400';
+            } else {
+              switch (status) {
+                case 'Completed':
+                  statusClass = 'bg-green-100 text-green-800 border-green-400 dark:text-green-500';
+                  break;
+                case 'Draft':
+                  statusClass = 'bg-orange-100 text-orange-800 border-orange-400 dark:text-orange-500';
+                  break;
+                case 'QC Rejected':
+                  statusClass = 'bg-red-100 text-red-800 border-red-400 dark:text-red-500';
+                  break;
+                case 'Pending QC':
+                  statusClass = 'bg-yellow-100 text-yellow-800 border-yellow-400 dark:text-yellow-500';
+                  break;
+              }
+            }
 
-                        const viewIcon = document.createElement("i");
-                        viewIcon.classList.add("fa-regular", "fa-eye", "pr-2");
-                        viewLink.appendChild(viewIcon);
-                        viewLink.appendChild(document.createTextNode("View"));
-                        container.appendChild(viewLink);
+            return `<div class="flex items-center lg:justify-center ${statusClass} text-xs font-medium me-2 px-2.5 py-0.5 rounded dark:bg-gray-700 dark:${status === 'submitted' ? 'text-green-400' : 'text-yellow-400'} border">
+      ${status}
+    </div>`;
+          },
+        },
+        {
+          title: "WAREHOUSE STATUS",
+          minWidth: 150,
+          responsive: 0,
+          field: "receiveStatus",
+          vertAlign: "middle",
+          print: false,
+          download: false,
+          formatter: function (cell, formatterParams, onRendered) {
+            let status = cell.getValue();
+            let statusClass = '';
 
-                        // Check the status before rendering "Edit" and "Delete" links
+            // Set status based on boolean value
+            if (status === true) {
+              status = 'Completed';
+            } else if (status === false) {
+              status = 'Pending';
+            }
 
-                        // Render "Edit" link
+            // Assign classes based on the status
+            switch (status) {
+              case 'Completed':
+                statusClass = 'bg-green-100 text-green-800 border-green-400 dark:text-green-500';
+                break;
+              case 'Draft':
+                statusClass = 'bg-orange-100 text-orange-800 border-orange-400 dark:text-orange-500';
+                break;
+              case 'QC Rejected':
+                statusClass = 'bg-red-100 text-red-800 border-red-400 dark:text-red-500';
+                break;
+              case 'Pending':
+                statusClass = 'bg-yellow-100 text-yellow-800 border-yellow-400 dark:text-yellow-500';
+                break;
+              default:
+                status = 'N/A';
+                statusClass = 'bg-gray-100 text-gray-800 border-gray-400';
+                break;
+            }
+
+            return `<div class="flex items-center lg:justify-center ${statusClass} text-xs font-medium me-2 px-2.5 py-0.5 rounded dark:bg-gray-700 dark:${status === 'submitted' ? 'text-green-400' : 'text-yellow-400'} border">
+      ${status}
+    </div>`;
+          },
+        },
+      {
+    title: "ACTIONS",
+    minWidth: 300,
+    field: "actions",
+    responsive: 1,
+    hozAlign: "center",
+    headerHozAlign: "center",
+    vertAlign: "middle",
+    print: false,
+    download: false,
+    formatter(cell) {
+        const container = document.createElement("div");
+        container.classList.add(
+            "flex",
+            "items-center",
+            "gap-3",
+            "justify-center",
+            "flex-nowrap",
+            "overflow-x-auto",
+            "whitespace-nowrap"
+        );
+
+        const response = cell.getData();
+        const loggedInUserId = localStorage.getItem("userId");
+
+        // Placeholder while data is being fetched
+        container.innerHTML = `<span class="text-gray-400 text-sm">Loading...</span>`;
+
+        getUserAccessData()
+            .then((userAccessData) => {
+                const userAccess = userAccessData.find((user) => user.userId === loggedInUserId);
+
+                // Clear placeholder
+                container.innerHTML = "";
+
+                if (userAccess) {
+                    // Conditionally render "Edit" link
+                    if (
+                        userAccess.goodsReceive &&
+                        userAccess.goodsReceive.includes("Edit") &&
+                        response.status !== "Completed" &&
+                        response.status !== "QC Rejected"
+                    ) {
                         const editLink = document.createElement("a");
-                        editLink.classList.add("flex", "items-center", "mr-3", "text-blue-500");
+                        editLink.classList.add(
+                            "flex",
+                            "items-center",
+                            "text-blue-500",
+                            "text-sm"
+                        );
                         editLink.href = "#";
                         editLink.addEventListener("click", (event) => {
                             event.preventDefault();
                             editRole(response.id);
                         });
-
-                        const editIcon = document.createElement("i");
-                        editIcon.classList.add("fa-regular", "fa-pen-to-square", "pr-2");
-                        editLink.appendChild(editIcon);
-                        editLink.appendChild(document.createTextNode("Update"));
+                        editLink.innerHTML = `<i class="fa-regular fa-pen-to-square mr-1"></i>Edit`;
                         container.appendChild(editLink);
+                    }
+                }
 
-                        // Render "Delete" link
-                        // const deleteLink = document.createElement("a");
-                        // deleteLink.classList.add("flex", "items-center", "text-danger");
-                        // deleteLink.href = "javascript:;";
-                        // deleteLink.addEventListener("click", function () {
-                        //     deleteRole(response.id); // Call the delete function
-                        // });
+                // Always render the "View" link
+                const viewLink = document.createElement("a");
+                viewLink.classList.add(
+                    "flex",
+                    "items-center",
+                    "text-primary",
+                    "text-sm"
+                );
+                viewLink.href = "#";
+                viewLink.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    viewRole(response.id);
+                });
+                viewLink.innerHTML = `<i class="fa-regular fa-eye mr-1"></i>View`;
+                container.appendChild(viewLink);
 
-                        // const deleteIcon = document.createElement("i");
-                        // deleteIcon.classList.add("fa-regular", "fa-trash-can", "pr-2");
-                        // deleteLink.appendChild(deleteIcon);
-                        // deleteLink.appendChild(document.createTextNode("Delete"));
-                        // container.appendChild(deleteLink);
+                // Normalize row height
+                cell.getRow().normalizeHeight();
+            })
+            .catch((error) => {
+                console.error("Error fetching user access data:", error);
+                container.innerHTML = `<span class="text-red-500 text-sm">Error</span>`;
+            });
+
+        return container;
+    },
+},
 
 
+        {
+    title: "<span class='text-xs font-bold text-center block'>PO Number</span>",
+    field: "ponumber",
+    visible: false,
+    print: true,
+    download: true,
+    formatter(cell) {
+      const response = cell.getData();
+      return `<div class="text-xs font-medium text-center block break-words">${response.ponumber}</div>`;
+    },
+  },
+  {
+    title: "<span class='text-xs font-bold text-center block'>GR Number</span>",
+    field: "grnumber",
+    visible: false,
+    print: true,
+    download: true,
+    formatter(cell) {
+      const response = cell.getData();
+      return `<div class="text-xs font-medium text-center block break-words">${response.grnumber}</div>`;
+    },
+  },
+  {
+    title: "<span class='text-xs font-bold text-center block'>Powder Number</span>",
+    field: "productcode",
+    visible: false,
+    print: true,
+    download: true,
+    formatter(cell) {
+      const response = cell.getData();
+      return `<div class="text-xs font-medium text-center block break-words">${response.productcode}</div>`;
+    },
+  },
+  {
+    title: "<span class='text-xs font-bold text-center block'>Employee ID</span>",
+    field: "resourcecode",
+    visible: false,
+    print: true,
+    download: true,
+    formatter(cell) {
+      const response = cell.getData();
+      return `<div class="text-xs font-medium text-center block break-words">${response.resourcecode}</div>`;
+    },
+  },
+  {
+    title: "<span class='text-xs font-bold text-center block'>Main Location</span>",
+    field: "location",
+    visible: false,
+    print: true,
+    download: true,
+    formatter(cell) {
+      const response = cell.getData();
+      const location = response.location ? response.location : 'N/A';
+      return `<div class="text-xs font-medium text-center block break-words">${location}</div>`;
+    },
+  },
+  {
+    title: "<span class='text-xs font-bold text-center block'>Vendor Name</span>",
+    field: "vendorname",
+    visible: false,
+    print: true,
+    download: true,
+    formatter(cell) {
+      const response = cell.getData();
+      return `<div class="text-xs font-medium text-center block break-words">${response.vendorname}</div>`;
+    },
+  },
+  {
+    title: "<span class='text-xs font-bold text-center block'>Vendor Code</span>",
+    field: "vendorcode",
+    visible: false,
+    print: true,
+    download: true,
+    formatter(cell) {
+      const response = cell.getData();
+      return `<div class="text-xs font-medium text-center block break-words">${response.vendorcode}</div>`;
+    },
+  },
+  {
+    title: "<span class='text-xs font-bold text-center block'>Lot Number</span>",
+    field: "lotnumber",
+    visible: false,
+    print: true,
+    download: true,
+    formatter(cell) {
+      const response = cell.getData();
+      return `<div class="text-xs font-medium text-center block break-words">${response.lotnumber}</div>`;
+    },
+  },
+  {
+    title: "<span class='text-xs font-bold text-center block'>Weight</span>",
+    field: "nett",
+    visible: false,
+    print: true,
+    download: true,
+    formatter(cell) {
+      const response = cell.getData();
+      return `<div class="text-xs font-medium text-center block break-words">${response.nett}</div>`;
+    },
+  },
+  {
+    title: "<span class='text-xs font-bold text-center block'>UOM</span>",
+    field: "uom",
+    visible: false,
+    print: true,
+    download: true,
+    formatter(cell) {
+      const response = cell.getData();
+      return `<div class="text-xs font-medium text-center block break-words">${response.uom}</div>`;
+    },
+  },
+  {
+    title: "<span class='text-xs font-bold text-center block'>Status</span>",
+    field: "status",
+    visible: false,
+    print: true,
+    download: true,
+    formatter(cell, formatterParams, onRendered) {
+      let status = cell.getValue();
+      let textColor;
 
+      if (!status) {
+        status = 'N/A';
+        textColor = 'text-gray-600';
+      } else {
+        switch (status) {
+          case 'Pending QC':
+            textColor = 'text-yellow-600';
+            break;
+          case 'Completed':
+            textColor = 'text-green-600';
+            break;
+          case 'Draft':
+            textColor = 'text-orange-600';
+            break;
+          case 'QC Rejected':
+            textColor = 'text-red-600';
+            break;
+          default:
+            textColor = 'text-black';
+        }
+      }
 
-                        return container;
-                    },
-                },
+      return `<span class="text-xs font-medium text-center block ${textColor} break-words">${status}</span>`;
+    },
+  }
 
-
-                {
-                    title: "GR Number",
-                    field: "grnumber",
-                    visible: false,
-                    print: true,
-                    download: true,
-                },
-                {
-                    title: "Powder Code",
-                    field: "powdercode",
-                    visible: false,
-                    print: true,
-                    download: true,
-                },
-                {
-                    title: "Vendor Code",
-                    field: "vendorcode",
-                    visible: false,
-                    print: true,
-                    download: true,
-                },
-                {
-                    title: "PO Number",
-                    field: "ponumber",
-                    visible: false,
-                    print: true,
-                    download: true,
-                },
-                {
-                    title: "Lot Number",
-                    field: "lotnumber",
-                    visible: false,
-                    print: true,
-                    download: true,
-                },
-                {
-                    title: "Gross",
-                    field: "gross",
-                    visible: false,
-                    print: true,
-                    download: true,
-                },
-                {
-                    title: "UOM",
-                    field: "uom",
-                    visible: false,
-                    print: true,
-                    download: true,
-                },
-                {
-                    title: "Weight",
-                    field: "weight",
-                    visible: false,
-                    print: true,
-                    download: true,
-                },
-                {
-                    title: "Warehouse Location",
-                    field: "warehouselocation",
-                    visible: false,
-                    print: true,
-                    download: true,
-                },
-                {
-                    title: "STATUS",
-                    field: "status",
-                    visible: false,
-                    print: true,
-                    download: true,
-                    formatter: function (cell, formatterParams, onRendered) {
-                        const status = cell.getValue();
-                        let statusText, statusColor;
-
-                        switch (status) {
-                            case 'submitted':
-                                statusText = 'Submitted';
-                                statusColor = 'text-success';
-                                break;
-                            case 'draft':
-                                statusText = 'Draft';
-                                statusColor = 'text-yellow-500'; // Use Tailwind CSS yellow color class
-                                break;
-                            case 'WHApprove':
-                                statusText = 'Warehouse Approved';
-                                statusColor = 'text-success';
-                                break;
-                            case 'WHReject':
-                                statusText = 'Warehouse Rejected';
-                                statusColor = 'text-danger';
-                                break;
-                            case 'QCApprove':
-                                statusText = 'QC Approved';
-                                statusColor = 'text-success';
-                                break;
-                            case 'QCReject':
-                                statusText = 'QC Rejected';
-                                statusColor = 'text-danger';
-                                break;
-                            default:
-                                statusText = 'Unknown';
-                                statusColor = 'text-warning';
-                        }
-
-                        return `<div class="flex items-center lg:justify-center ${statusColor}">
-      <i data-lucide="${status === 'submitted' ? 'check-square' : 'x-square'}" class="w-4 h-4 mr-2"></i> ${statusText}
-    </div>`;
-                    },
-                },
-            ],
-        });
-    }
-
-    tabulator.value?.on("renderComplete", () => {
-        createIcons({
-            icons,
-            attrs: {
-                "stroke-width": 1.5,
-            },
-            nameAttr: "data-lucide",
-        });
+      ],
     });
+  }
+
+  tabulator.value?.on("renderComplete", () => {
+    createIcons({
+      icons,
+      attrs: {
+        "stroke-width": 1.5,
+      },
+      nameAttr: "data-lucide",
+    });
+  });
 };
 
 // Redraw table onresize
 const reInitOnResizeWindow = () => {
-    window.addEventListener("resize", () => {
-        if (tabulator.value) {
-            tabulator.value.redraw();
-            createIcons({
-                icons,
-                attrs: {
-                    "stroke-width": 1.5,
-                },
-                nameAttr: "data-lucide",
-            });
-        }
-    });
+  window.addEventListener("resize", () => {
+    if (tabulator.value) {
+      tabulator.value.redraw();
+      createIcons({
+        icons,
+        attrs: {
+          "stroke-width": 1.5,
+        },
+        nameAttr: "data-lucide",
+      });
+    }
+  });
 };
 
 // Filter function
-// Update the onFilter function
 const onFilter = () => {
   if (tabulator.value) {
-    tabulator.value.setFilter(function (data: any) {
-      // Parse dates from the data object
-      const dateValue = new Date(data.created_date);
+    tabulator.value.setFilter((data) => {
+      // Parse the date from the API data
+      const dateValue = new Date(data.date);
+
+      // Validate the dateValue
+      if (isNaN(dateValue.getTime())) {
+        console.error("Invalid Date:", data.date);
+        return false; // Exclude entries with invalid dates
+      }
+
+      // Get start and end dates from the filters
       const startDate = filter.startDate ? new Date(filter.startDate) : null;
       const endDate = filter.endDate ? new Date(filter.endDate) : null;
 
-      // Check if the date falls within the specified range or is exactly one of the dates
-      if (!startDate || !endDate) {
-        return true; // Return true if either startDate or endDate is null
+      // Validate start and end dates
+      if (startDate && isNaN(startDate.getTime())) {
+        console.error("Invalid Start Date:", filter.startDate);
+        return false;
+      }
+      if (endDate && isNaN(endDate.getTime())) {
+        console.error("Invalid End Date:", filter.endDate);
+        return false;
       }
 
-      const isWithinRange = dateValue >= startDate && dateValue <= endDate;
-      const isStartDate = dateValue.toDateString() === startDate.toDateString();
-      const isEndDate = dateValue.toDateString() === endDate.toDateString();
+      // Function to format a date to YYYY-MM-DD
+      const formatDateToUTC = (date: Date) => {
+        if (!date) return null;
+        // Adjust the date to UTC and format it to YYYY-MM-DD
+        const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        return utcDate.toISOString().split('T')[0];
+      };
 
-      return isWithinRange || isStartDate || isEndDate;
+      // Format the date components to strings
+      const formattedDateValue = formatDateToUTC(dateValue);
+      const formattedStartDate = startDate ? formatDateToUTC(startDate) : null;
+      const formattedEndDate = endDate ? formatDateToUTC(endDate) : null;
+
+      // Debugging logs
+      console.log(`Data Date: ${formattedDateValue}, Start Date: ${formattedStartDate}, End Date: ${formattedEndDate}`);
+
+      // Check if the date falls within the specified range or matches the start date
+      if (formattedDateValue && formattedStartDate && !formattedEndDate) {
+        // Only start date is specified
+        return formattedDateValue === formattedStartDate;
+      } else if (formattedDateValue && formattedStartDate && formattedEndDate) {
+        // Both start and end dates are specified
+        return formattedDateValue >= formattedStartDate && formattedDateValue <= formattedEndDate;
+      } else if (formattedDateValue && !formattedStartDate && formattedEndDate) {
+        // Only end date is specified, match date equals end date
+        return formattedDateValue === formattedEndDate;
+      } else {
+        // Neither start nor end date is specified
+        return true; // Return all data
+      }
+    });
+  }
+};
+
+const ponumber = () => {
+  if (tabulator.value) {
+    tabulator.value.setFilter("ponumber", 'like', filter.ponumber);
+  }
+};
+const productcode = () => {
+  if (tabulator.value && filter.productcode) {
+    console.log("Applying filter for productcode:", filter.productcode);
+    tabulator.value.setFilter((data) => {
+      const searchValue = filter.productcode.toLowerCase();
+      const columnValue = data.productcode ? data.productcode.toLowerCase() : '';
+      return columnValue.includes(searchValue);
+    });
+  } else {
+    console.warn("Filter value is empty or Tabulator not initialized");
+  }
+};
+
+
+const onStatus = () => {
+  if (tabulator.value) {
+    if (filter.status === "Completed") {
+      // Show only rows with status "Completed" when filtered by "Completed"
+      tabulator.value.setFilter("status", "=", "Completed");
+    } else if (filter.status) {
+      // Show other statuses if specified
+      tabulator.value.setFilter("status", "like", filter.status);
+    } else {
+      // Clear the filter to return to the default view
+      tabulator.value.clearFilter(true);
+      tabulator.value.setFilter((item) => {
+        return !(item.status === 'Completed' && item.receiveStatus === true);
+      });
+    }
+  }
+};
+
+
+// On reset filter
+const onResetFilter = () => {
+  setFilter({
+    ...filter,
+    value: "",
+    ponumber: "",
+    status: "",
+    startDate: null,
+    endDate: null,
+  });
+
+  if (tabulator.value) {
+    // Clear all filters
+    tabulator.value.clearFilter(true);
+
+    // Reapply the default filter to hide "Completed" items with receiveStatus: true
+    tabulator.value.setFilter((item) => {
+      return !(item.status === 'Completed' && item.receiveStatus === true);
     });
   }
 };
 
 
-const onGRNumber = () => {
-    if (tabulator.value) {
-        tabulator.value.setFilter("grnumber", 'like', filter.grnumber);
-    }
-};
-
-// On reset filter
-const onResetFilter = () => {
-    setFilter({
-        ...filter,
-        value: "",
-        id: "",
-        grnumber: "",
-        startDate: null,
-        endDate: null,
-    });
-    onFilter();
-};
-
 // Print
 const onPrint = () => {
-    if (tabulator.value) {
-        tabulator.value.print();
-    }
+  if (tabulator.value) {
+    tabulator.value.print();
+  }
 };
 
+const loading = ref<boolean>(false); // Controls loading animation modal
+// API Base URL
+const API_BASE_URL = 'http://10.87.0.33:8082/api/GRDetails/';
 
 
 onMounted(() => {
-    // Fetch data from API
-    axios.get('http://172.188.122.62:8085/api/GRDetails')
-        .then(response => {
-            // Filter out data with status "deleted" and "draft"
-            const filteredData = response.data.result.filter((item: any) => item.status !== 'deleted' && item.status !== 'draft' && item.status !== 'WHReject' && item.status !== 'submitted');
+  loading.value = true; // Show loading modal at the start
 
-            // Once data is received, populate the table
-            console.log(filteredData);
-            if (tabulator.value) {
-                tabulator.value.setData(filteredData);
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching data:', error);
+  // Define all data-fetching promises
+  const fetchPromises = [
+    axios.get(API_BASE_URL).then(response => {
+      const data = response.data.result;
+
+      // Sort the data by date
+      data.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      // Populate the table and apply the filters
+      if (tabulator.value) {
+        tabulator.value.setData(data);
+
+        // Apply filters to exclude completed items and those with qcrequired = false
+        tabulator.value.setFilter((item) => {
+          return !(
+            (item.status === 'Completed' && item.receiveStatus === true) ||
+            item.qcrequired === false
+          );
         });
+      }
+    }).catch(error => {
+      console.error('Error fetching main data:', error);
+    }),
 
-    initTabulator();
-    reInitOnResizeWindow();
-    fetchGRNumber();
-    fetchVendorCode();
-    fetchUOM();
-    fetchWarehouseLocations();
+    // Other data-fetching functions
+    fetchUOM(),
+    fetchVendorName(),
+    fetchGRDetails(),
+    fetchVendorCode(),
+    fetchNamesShift(),
+    fetchLocation()
+  ];
+
+  // Wait for all data-fetching promises to complete
+  Promise.all(fetchPromises)
+    .finally(() => {
+      loading.value = false; // Hide loading modal once all data is fetched
+    });
+
+  initTabulator();
+  reInitOnResizeWindow();
 });
+
+
+
+
+
+// Utility Functions
+const formatDate = (date: any) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  const milliseconds = String(date.getMilliseconds()).padStart(3, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}Z`;
+};
+
+const formatDateView = (date: Date): string => {
+  const pad = (n: number) => (n < 10 ? '0' + n : n);
+
+  const day = pad(date.getDate());
+  const month = pad(date.getMonth() + 1);
+  const year = date.getFullYear();
+  const hours = date.getHours() % 12 || 12;
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+  const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
+
+  return `${day}/${month}/${year} ${pad(hours)}:${minutes}:${seconds} ${ampm}`;
+};
+
+const formattedDate = computed(() => {
+  return formatDateView(new Date(viewData.date));
+});
+
+const isNumeric = (value: any) => {
+  // Check if the value is a valid number
+  return !isNaN(parseFloat(value)) && isFinite(value);
+};
+
+const viewData = reactive({
+  id: null,
+  productcode: '',
+  date: formatDate(new Date()),
+  resourcecode: '',
+  shift: '',
+  vendorname: '',
+  vendorcode: '',
+  ponumber: '',
+  lotnumber: '',
+  nett: '',
+  gross: '',
+  uom: '',
+  qcrequired: true,
+  whrequired: false,
+  grnumber: '',
+  powdercode: '',
+  status: '',
+  location: '',
+  vendornames: [] as string[],
+  vendorcodes: [] as string[],
+  locations: [] as string[],
+  shifts: [] as string[],
+  grNumber: [] as string[],
+  uoms: [] as string[],
+  warehouseCodes: [] as string[],
+  qualityCheckList: [] as Array<{ jobId: string; resourceCode: string; shift: string; qcPassed: string }>,
+  listBoxesList: [] as Array<{ jobId: string; subLotNumber: string; nettWeight: number; grossWeight: number }>,
+  selectedFile: null as File | null,
+  formSubmitted: false,
+  fileName: '',
+  selectedSubLocation: '',
+  subLocList: [] as SubLocation[], // Use the SubLocation type here
+});
+
+interface SubLocation {
+  name: string;
+}
 
 
 const editFormData = reactive({
-    id: null,
-    grnumber: '',
-    powdercode: '',
-    vendorcode: '',
-    ponumber: '',
-    lotnumber: '',
-    gross: '',
-    uom: '',
-    weight: '',
-    warehouselocation: '',
-    status: 'submitted',
-    vendorCodes: [] as any[], // Use a separate property for rendering the options in the dropdown
-    uoms: [] as string[], // Use a separate property for rendering the options in the dropdown
-    warehouseCodes: [] as string[], // Use a separate property for rendering the options in the dropdown
+  id: null,
+  productcode: '',
+  date: formatDate(new Date()),
+  resourcecode: '',
+  shift: '',
+  vendorname: '',
+  vendorcode: '',
+  ponumber: '',
+  lotnumber: '',
+  nett: '',
+  gross: '',
+  uom: '',
+  qcrequired: true,
+  whrequired: false,
+  grnumber: '',
+  powdercode: '',
+  status: '',
+  location: '',
+  vendornames: [] as string[],
+  vendorcodes: [] as string[],
+  locations: [] as string[],
+  shifts: [] as string[],
+  grNumber: [] as string[],
+  uoms: [] as string[],
+  warehouseCodes: [] as string[],
+  qualityCheckList: [] as Array<{ jobId: string; resourceCode: string; shift: string; qcPassed: string }>,
+  listBoxesList: [] as Array<{ jobId: string; subLotNumber: string; nettWeight: number; grossWeight: number }>,
+  selectedFile: null as File | null,
+  formSubmitted: false,
+  fileName: '',
+  selectedSubLocation: '',
+  subLocList: [] as SubLocation[], // Use the SubLocation type here
 });
 
-const editRole = (id: string) => {
-    // Fetch data for the specific ID
-    axios.get(`http://172.188.122.62:8085/api/GRDetails/${id}`)
-        .then(response => {
-            const data = response.data.result;
+// Location dropdown control for edit form
+const isEditLocationDropdownOpen = ref(false);
+const editLocationSearchQuery = ref('');
+const selectedEditLocation = ref(editFormData.location);
 
-            // Check if the array has at least one item
-            if (data && data.length > 0) {
-                // Log the retrieved data
-                console.log('Retrieved Data:', data);
-
-                // Set data to the editFormData
-                const firstItem = data[0];
-                editFormData.id = firstItem.id;
-                editFormData.grnumber = firstItem.grnumber || '';
-                editFormData.powdercode = firstItem.powdercode || '';
-                editFormData.vendorcode = firstItem.vendorcode || '';
-                editFormData.ponumber = firstItem.ponumber || '';
-                editFormData.lotnumber = firstItem.lotnumber || '';
-                editFormData.gross = firstItem.gross || '';
-                editFormData.uom = firstItem.uom || '';
-                editFormData.weight = firstItem.weight || '';
-                editFormData.warehouselocation = firstItem.warehouselocation || '';
-                editFormData.status = firstItem.status || 'submitted';
-
-                // Open the edit slideover
-                setEditSlideOver(true);
-            } else {
-                console.error('No data found for the specified ID:', id);
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching data for editing:', error);
-        });
-};
-
-
-
-const viewData = reactive({
-    id: '',
-    grnumber: '',
-    powdercode: '',
-    vendorcode: '',
-    ponumber: '',
-    lotnumber: '',
-    gross: '',
-    uom: '',
-    weight: '',
-    warehouselocation: '',
-    status: 'submitted',
-
+// Computed property to filter locations based on search query for edit form
+const filteredEditLocations = computed(() => {
+  if (!editLocationSearchQuery.value) {
+    return editFormData.locations;
+  }
+  return editFormData.locations.filter((location) =>
+    location.toLowerCase().includes(editLocationSearchQuery.value.toLowerCase())
+  );
 });
 
-const viewRole = (id: string) => {
-    // Fetch data for the specific ID
-    axios.get(`http://172.188.122.62:8085/api/GRDetails/${id}`)
-        .then(response => {
-            const data = response.data.result;
-
-            // Check if the array has at least one item
-            if (data && data.length > 0) {
-                // Log the retrieved data
-                console.log('Retrieved Data:', data);
-
-                // Set data to the viewData
-                const firstItem = data[0];
-                viewData.id = firstItem.id;
-                viewData.grnumber = firstItem.grnumber || '';
-                viewData.powdercode = firstItem.powdercode || '';
-                viewData.vendorcode = firstItem.vendorcode || '';
-                viewData.ponumber = firstItem.ponumber || '';
-                viewData.lotnumber = firstItem.lotnumber || '';
-                viewData.gross = firstItem.gross || '';
-                viewData.uom = firstItem.uom || '';
-                viewData.weight = firstItem.weight || '';
-                viewData.warehouselocation = firstItem.warehouselocation || '';
-                viewData.status = firstItem.status || 'submitted';
-
-                // Open the edit slideover
-                setviewModal(true);
-            } else {
-                console.error('No data found for the specified ID:', id);
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching data for editing:', error);
-        });
+// Function to toggle location dropdown open/close for edit form
+const toggleEditLocationDropdown = () => {
+  isEditLocationDropdownOpen.value = !isEditLocationDropdownOpen.value;
+  editLocationSearchQuery.value = ''; // Clear search query when dropdown is opened
 };
 
-
-const viewModal = ref(false);
-const setviewModal = (value: boolean) => {
-    viewModal.value = value;
+// Function to select a location in edit form
+const selectEditLocation = (location: any) => {
+  selectedEditLocation.value = location;
+  editFormData.location = location;
+  isEditLocationDropdownOpen.value = false; // Close the dropdown after selecting
 };
 
+// Sub Location dropdown control for edit form
+const isEditSubLocationDropdownOpen = ref(false);
+const editSubLocationSearchQuery = ref('');
+const selectedEditSubLocation = ref(editFormData.selectedSubLocation);
 
-const updateRole = (status: 'QCReject' | 'QCApprove') => {
-    // Show a confirmation dialog before making the API call
+// Computed property to filter sub locations based on search query for edit form
+const filteredEditSubLocations = computed(() => {
+  if (!editSubLocationSearchQuery.value) {
+    return editFormData.subLocList;
+  }
+  return editFormData.subLocList.filter((subloc) =>
+    subloc.name.toLowerCase().includes(editSubLocationSearchQuery.value.toLowerCase())
+  );
+});
+
+// Function to toggle sub-location dropdown open/close for edit form
+const toggleEditSubLocationDropdown = () => {
+  if (editFormData.location && editFormData.subLocList.length > 0) {
+    isEditSubLocationDropdownOpen.value = !isEditSubLocationDropdownOpen.value;
+    editSubLocationSearchQuery.value = ''; // Clear search query when dropdown is opened
+  }
+};
+
+// Function to select a sub location in edit form
+const selectEditSubLocation = (subLocation: any) => {
+  selectedEditSubLocation.value = subLocation;
+  editFormData.selectedSubLocation = subLocation;
+  isEditSubLocationDropdownOpen.value = false; // Close the dropdown after selecting
+};
+
+// Define permission variables for goodsReceive
+let canEditGoodsReceive = false;
+
+// Define the fetchUserGoodsReceivePermissions function
+const fetchUserGoodsReceivePermissions = async () => {
+  const userId = localStorage.getItem('userId');
+  if (!userId) {
     Swal.fire({
-        title: 'Confirmation',
-        text: `Are you sure you want to ${status === 'QCReject' ? 'reject' : 'approve'} this role?`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#1e40af',
-        cancelButtonColor: '#d33',
-        confirmButtonText: `Yes, ${status === 'QCReject' ? 'reject' : 'approve'} it!`,
-    }).then((result) => {
-        // If the user confirms, proceed with adding or saving the role
-        if (result.isConfirmed && editFormData.id) {
-            // Set the status based on the button clicked
-            editFormData.status = status;
-            // Handle adding or saving a role (PUT request)
-            axios.put(`http://172.188.122.62:8085/api/GRDetails/${editFormData.id}`, {
-                grnumber: editFormData.grnumber,
-                powdercode: editFormData.powdercode,
-                vendorcode: editFormData.vendorcode,
-                ponumber: editFormData.ponumber,
-                lotnumber: editFormData.lotnumber,
-                gross: editFormData.gross,
-                // uom: editFormData.uom,
-                weight: editFormData.weight,
-                warehouselocation: editFormData.warehouselocation,
-                status: editFormData.status,
-            })
-                .then(response => {
-                    // Close the edit slideover
-                    setEditSlideOver(false);
+      icon: 'error',
+      title: 'Error',
+      text: 'User ID not found in local storage'
+    });
+    return;
+  }
 
-                    // Refetch filtered data after successful update
-                    axios.get('http://172.188.122.62:8085/api/GRDetails')
-                        .then(response => {
-                            // Filter out data with status "deleted", "draft", and "WHReject"
-                            const filteredData = response.data.result.filter((item: any) => item.status !== 'deleted' && item.status !== 'draft' && item.status !== 'WHReject');
+  try {
+    console.log(`Fetching details for user ID: ${userId}`); // Debugging line
 
-                            // Update table data after successful update
-                            console.log(filteredData);
-                            if (tabulator.value) {
-                                tabulator.value.setData(filteredData);
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error fetching data:', error);
-                        });
+    // Fetch user details from the UserAccessManagement API
+    const userAccessResponse = await axios.get('http://10.87.0.33:8082/api/UserAccessManagement');
+    const userDetails = userAccessResponse.data.result.find((user: any) => user.userId === userId);
 
-                    // Show success message
-                    Swal.fire({
-                        icon: 'success',
-                        title: `Role ${status === 'QCReject' ? 'Saved' : 'QCApprove'} Successfully`,
-                        showConfirmButton: false,
-                        showCloseButton: true, // Show close button (X)
-                        timer: 5000,
-                        timerProgressBar: true, // Display timer progress bar
-                        position: 'top-end',
-                        iconColor: 'green',
-                        toast: true,
-                        background: '#fff',
-                        showClass: {
-                            popup: 'animate__animated animate__fadeInUp',
-                        },
-                        hideClass: {
-                            popup: 'animate__animated animate__fadeOutUp',
-                        },
-                    });
+    if (userDetails) {
+      console.log('Fetched user details:', userDetails); // Debugging line
 
-                    console.log(`Role ${status === 'QCReject' ? 'saved' : 'QCApprove'} successfully:`, response.data.result);
-                })
-                .catch(error => {
-                    console.error(`Error ${status === 'QCReject' ? 'saving' : 'QCApprove'} role:`, error);
-                });
+      const goodsReceive = userDetails.goodsReceive || ''; // Ensure the value is a string
+
+      // Check if the string contains "Edit" for goodsReceive
+      canEditGoodsReceive = goodsReceive.includes('Edit');
+
+      console.log('canEditGoodsReceive:', canEditGoodsReceive); // Debugging log
+    } else {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'User details not found'
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching user details:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: 'An error occurred while fetching user details'
+    });
+  }
+};
+
+// Call the fetchUserGoodsReceivePermissions function to get permissions
+fetchUserGoodsReceivePermissions();
+
+watch(() => editFormData.location, (newLocation) => {
+  if (newLocation) {
+    fetchSubLocations(newLocation); // Removed the second argument 'edit'
+  }
+});
+
+
+const fetchSubLocations = (locationName: string) => {
+  axios
+    .get('http://10.87.0.33:8082/api/LocationMaster')
+    .then(response => {
+      const locationData = response.data.result.find((item: any) => item.name === locationName);
+
+      if (locationData && locationData.subLocationDetailsList) {
+        editFormData.subLocList = locationData.subLocationDetailsList;
+
+        // Set the selected sublocation if it's not already set
+        if (!editFormData.selectedSubLocation) {
+          editFormData.selectedSubLocation = locationData.subLocationDetailsList.length > 0
+            ? locationData.subLocationDetailsList[0].name
+            : '';
         }
+      } else {
+        // Reset sublocation if no data found
+        editFormData.subLocList = [];
+        editFormData.selectedSubLocation = '';
+      }
+    })
+    .catch(error => {
+      console.error('Error fetching sub-locations:', error);
+      // Reset sublocation on error
+      editFormData.subLocList = [];
+      editFormData.selectedSubLocation = '';
     });
 };
 
 
-const updateTableData = () => {
-    axios.get(`http://172.188.122.62:8085/api/GRDetails`)
-        .then(response => {
-            // Filter out data with status "deleted"
-            const filteredData = response.data.result.filter((item: any) => item.status !== 'deleted');
+const handleFileUpload = (event: any) => {
+  const file = event.target.files[0];
+  if (file) {
+    editFormData.fileName = file.name; // Store the file name
+    editFormData.selectedFile = file; // Store the actual file
+    viewData.fileName = file.name; // Store the file name
+    viewData.selectedFile = file; // Store the actual file
+  }
+};
 
-            if (tabulator.value) {
-                tabulator.value.setData(filteredData);
-            }
+
+const isUploadDisabled = computed(() => {
+  return editFormData.status === 'Completed' || editFormData.status === 'QC Rejected';
+});
+
+const downloadFile = () => {
+  // Construct the full API URL with parameters
+  const apiUrl = 'http://10.87.0.33:8082/api/Files';
+  const params = {
+    ModuleName: 'GR',
+    grnoorjobid: editFormData.grnumber,
+  };
+  const queryString = new URLSearchParams(params).toString();
+  const fullUrl = `${apiUrl}?${queryString}`;
+
+  // Log the full API URL with parameters
+  console.log('Opening API link in a new window:', fullUrl);
+
+  // Open the API link in a new window
+  window.open(fullUrl, '_blank');
+};
+const viewdownloadFile = () => {
+  // Construct the full API URL with parameters
+  const apiUrl = 'http://10.87.0.33:8082/api/Files';
+  const params = {
+    ModuleName: 'GR',
+    grnoorjobid: viewData.grnumber,
+  };
+  const queryString = new URLSearchParams(params).toString();
+  const fullUrl = `${apiUrl}?${queryString}`;
+
+  // Log the full API URL with parameters
+  console.log('Opening API link in a new window:', fullUrl);
+
+  // Open the API link in a new window
+  window.open(fullUrl, '_blank');
+};
+
+watch(() => editFormData.grnumber, async (newVal) => {
+  if (newVal) {
+    try {
+      const response = await axios.get('http://10.87.0.33:8082/api/Files', {
+        params: {
+          ModuleName: 'GR',
+          grnoorjobid: newVal,
+        },
+      });
+      const contentDisposition = response.headers['content-disposition'];
+      if (contentDisposition && contentDisposition.indexOf('attachment') !== -1) {
+        const matches = /filename="([^"]+)"/.exec(contentDisposition);
+        if (matches != null && matches[1]) {
+          const filename = matches[1];
+          const fileExtension = filename.split('.').pop();
+          editFormData.fileName = filename;
+        }
+      } else {
+        editFormData.fileName = `${editFormData.grnumber}-QC`;
+      }
+    } catch (error) {
+      console.error('Error fetching file details:', error);
+    }
+  }
+});
+watch(() => viewData.grnumber, async (newVal) => {
+  if (newVal) {
+    try {
+      const response = await axios.get('http://10.87.0.33:8082/api/Files', {
+        params: {
+          ModuleName: 'GR',
+          grnoorjobid: newVal,
+        },
+      });
+      const contentDisposition = response.headers['content-disposition'];
+      if (contentDisposition && contentDisposition.indexOf('attachment') !== -1) {
+        const matches = /filename="([^"]+)"/.exec(contentDisposition);
+        if (matches != null && matches[1]) {
+          const filename = matches[1];
+          const fileExtension = filename.split('.').pop();
+          viewData.fileName = filename;
+        }
+      } else {
+        viewData.fileName = `${viewData.grnumber}-QC`;
+      }
+    } catch (error) {
+      console.error('Error fetching file details:', error);
+    }
+  }
+});
+
+
+const addFormData = reactive({
+  productcode: '',
+  date: formatDate(new Date()),
+  resourcecode: '',
+  shift: '',
+  vendorname: '',
+  vendorcode: '',
+  ponumber: '',
+  lotnumber: '',
+  nett: '',
+  gross: '',
+  uom: '',
+  qcrequired: false,
+  whrequired: false,
+  grnumber: '',
+  powdercode: '',
+  status: '',
+  vendornames: [] as string[],
+  vendorcodes: [] as string[],
+  shifts: [] as string[],
+  grNumber: [] as string[],
+  uoms: [] as string[],
+  warehouseCodes: [] as string[],
+  qualityCheckList: [] as Array<{ jobId: string; resourceCode: string; shift: string; qcPassed: 'false' }>,
+  listBoxesList: [] as Array<{ jobId: string; subLotNumber: string; nettWeight: number; grossWeight: number }>,
+});
+
+const qcPassedValue = ref('true');
+
+watch(
+  () => [editFormData.grnumber, editFormData.resourcecode, editFormData.shift, qcPassedValue.value],
+  () => {
+    editFormData.qualityCheckList = [{
+      jobId: editFormData.grnumber,
+      resourceCode: editFormData.resourcecode,
+      shift: editFormData.shift,
+      qcPassed: qcPassedValue.value
+    }];
+  },
+  { immediate: true }
+);
+
+
+
+const fetchNamesShift = () => {
+  axios.get('http://10.87.0.33:8082/api/ShiftMaster')
+    .then(response => {
+      const nameData = response.data.result;
+
+      if (Array.isArray(nameData)) {
+        // Filter out items with status "Inactive" or "InActive"
+        const activeNameData = nameData.filter(item => item.status.toLowerCase() !== 'inactive');
+
+        // Map the activeNameData array to extract the 'name' property
+        addFormData.shifts = activeNameData.map(item => item.name);
+        editFormData.shifts = activeNameData.map(item => item.name);
+      } else {
+        console.error('Invalid response format for name:', nameData);
+      }
+    })
+    .catch(error => {
+      console.error('Error fetching names:', error);
+    });
+};
+
+const fetchLocation = () => {
+  axios.get('http://10.87.0.33:8082/api/LocationMaster')
+    .then(response => {
+      const nameData = response.data.result;
+
+      if (Array.isArray(nameData)) {
+        // Filter out items with status "Inactive" or "InActive"
+        const activeNameData = nameData.filter(item => item.status.toLowerCase() !== 'inactive');
+
+        // Map the activeNameData array to extract the 'name' property
+        editFormData.locations = activeNameData.map(item => item.name);
+      } else {
+        console.error('Invalid response format for name:', nameData);
+      }
+    })
+    .catch(error => {
+      console.error('Error fetching names:', error);
+    });
+};
+
+const fetchVendorName = () => {
+  axios.get('http://10.87.0.33:8082/api/VendorMaster')
+    .then(response => {
+      const nameData = response.data.result;
+
+      if (Array.isArray(nameData)) {
+        // Filter out items with status "Inactive" or "InActive"
+        const activeNameData = nameData.filter(item => item.status.toLowerCase() !== 'inactive');
+
+        // Map the activeNameData array to extract the 'name' property
+        addFormData.vendornames = activeNameData.map(item => item.name);
+        editFormData.vendornames = activeNameData.map(item => item.name);
+      } else {
+        console.error('Invalid response format for name:', nameData);
+      }
+    })
+    .catch(error => {
+      console.error('Error fetching names:', error);
+    });
+};
+
+const fetchVendorCode = () => {
+  axios.get('http://10.87.0.33:8082/api/VendorMaster')
+    .then(response => {
+      const nameData = response.data.result;
+
+      if (Array.isArray(nameData)) {
+        // Filter out items with status "Inactive" or "InActive"
+        const activeNameData = nameData.filter(item => item.status.toLowerCase() !== 'inactive');
+
+        // Map the activeNameData array to extract the 'name' property
+        addFormData.vendorcodes = activeNameData.map(item => item.code);
+        editFormData.vendorcodes = activeNameData.map(item => item.code);
+      } else {
+        console.error('Invalid response format for name:', nameData);
+      }
+    })
+    .catch(error => {
+      console.error('Error fetching names:', error);
+    });
+};
+
+// Function to fetch GR number
+const fetchGRDetails = () => {
+  axios.get('http://10.87.0.33:8082/api/GRDetails/GetGRNo')
+    .then(response => {
+      console.log('GR Number Response:', response); // Debugging line
+      const grNumber = response.data;
+
+      if (typeof grNumber === 'string') {
+        // Update grNumber in form data
+        addFormData.grnumber = grNumber;
+        console.log('Fetched GR Number:', grNumber); // Debugging line
+      } else {
+        console.error('Invalid response format for GR number:', grNumber);
+      }
+    })
+    .catch(error => {
+      console.error('Error fetching GR number:', error);
+    });
+};
+
+const fetchUOM = () => {
+  axios.get('http://10.87.0.33:8082/api/GRDetails/GetUOMDDL')
+    .then(response => {
+      const uomData = response.data.result;
+
+      if (Array.isArray(uomData)) {
+        // If it's an array, use the first element or handle multiple UOMs as needed
+        addFormData.uom = uomData.length > 0 ? uomData[0].uomcode : '';
+        // Assign the array to addFormData.uoms for rendering options in the dropdown
+        addFormData.uoms = uomData.map(item => item.uomcode);
+        editFormData.uom = uomData.length > 0 ? uomData[0].uomcode : '';
+        // Assign the array to addFormData.uoms for rendering options in the dropdown
+        editFormData.uoms = uomData.map(item => item.uomcode);
+      } else if (typeof uomData === 'object') {
+        // If it's an object, use its properties
+        addFormData.uom = uomData.uomcode || '';
+        addFormData.uoms = [uomData.uomcode]; // Set an array with a single value
+        editFormData.uom = uomData.uomcode || '';
+        editFormData.uoms = [uomData.uomcode]; // Set an array with a single value
+      } else {
+        console.error('Invalid response format for UOM:', uomData);
+      }
+    })
+    .catch(error => {
+      console.error('Error fetching UOM:', error);
+    });
+};
+
+
+
+const formSubmitted = ref(false);
+
+// Modal States
+const viewModal = ref(false);
+const setviewModal = (value: any) => {
+  viewModal.value = value;
+  if (!value) {
+    viewData.fileName = '';
+  }
+
+};
+
+// Utility function for error handling
+const handleError = (error: any, message: any) => {
+  console.error(message, error);
+  Swal.fire({
+    icon: 'error',
+    title: 'Operation Failed',
+    text: message,
+  });
+};
+
+
+// Fetch and Set Data for Edit/View
+let fetchedListBoxes: any[] = [];  // Store original fetched sub-lot numbers
+
+const fetchAndSetData = (id: string, formData: any, modalSetter: (value: boolean) => void, isView: boolean = false) => {
+  loading.value = true; // Start loading
+
+  axios.get(`${API_BASE_URL}${id}`)
+    .then(response => {
+      const data = response.data.result;
+      console.log('Fetched Data:', data);
+
+      if (data && data.length > 0) {
+        const [firstItem] = data;
+
+        // Map data to formData properties
+        formData.id = firstItem.id;
+        formData.grnumber = firstItem.grnumber;
+        formData.productcode = firstItem.productcode;
+        formData.date = firstItem.date || formatDate(new Date());
+        formData.resourcecode = firstItem.resourcecode || '';
+        formData.shift = firstItem.shift || '';
+        formData.vendorname = firstItem.vendorname || '';
+        formData.vendorcode = firstItem.vendorcode || '';
+        formData.location = firstItem.location || '';
+        formData.ponumber = firstItem.ponumber || '';
+        formData.lotnumber = firstItem.lotnumber || '';
+        formData.noofBoxes = firstItem.noofBoxes || '';
+        formData.nett = firstItem.nett || 0;
+        formData.gross = firstItem.gross || 0;
+        formData.discrepencyWeight = firstItem.discrepencyWeight || 0;
+        formData.uom = firstItem.uom || '';
+        formData.qcrequired = !!firstItem.qcrequired;
+        formData.whrequired = !!firstItem.whrequired;
+        formData.status = firstItem.status || '';
+        formData.qualityCheckList = firstItem.qualityCheckList || [];
+        formData.listBoxesList = firstItem.listBoxes || [];
+
+        // Map subLocationDetailsList to subLocList and set the default Sub Location
+        formData.subLocList = firstItem.subLocationDetailsList?.map((subLoc: any) => ({
+          id: subLoc.id,
+          name: subLoc.name
+        })) || [];
+        formData.selectedSubLocation = formData.subLocList[0]?.name || '';
+
+
+        selectedEditLocation.value = formData.location;
+        selectedEditSubLocation.value = formData.selectedSubLocation;
+
+        // Store fetched lot number and sub-lot numbers
+        fetchedListBoxes = JSON.parse(JSON.stringify(formData.listBoxesList));
+
+        // Open modal after data is set
+        modalSetter(true);
+      } else {
+        console.error('No data found for the specified ID:', id);
+      }
+    })
+    .catch(error => handleError(error, 'Error fetching data for editing'))
+    .finally(() => {
+      loading.value = false; // End loading
+    });
+};
+
+
+
+
+const editRole = (id: string) => fetchAndSetData(id, editFormData, setEditSlideOver);
+const viewRole = (id: string) => fetchAndSetData(id, viewData, setviewModal, true);
+
+// Update Table Data
+const updateTableData = () => {
+  loading.value = true; // Show loading modal at the start
+
+// Define all data-fetching promises
+const fetchPromises = [
+  axios.get(API_BASE_URL).then(response => {
+    const data = response.data.result;
+
+    // Sort the data by date
+    data.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // Populate the table and apply the filters
+    if (tabulator.value) {
+      tabulator.value.setData(data);
+
+      // Apply filters to exclude completed items and those with qcrequired = false
+      tabulator.value.setFilter((item) => {
+        return !(
+          (item.status === 'Completed' && item.receiveStatus === true) ||
+          item.qcrequired === false
+        );
+      });
+    }
+  }).catch(error => {
+    console.error('Error fetching main data:', error);
+  }),
+
+  // Other data-fetching functions
+  fetchUOM(),
+  fetchVendorName(),
+  fetchGRDetails(),
+  fetchVendorCode(),
+  fetchNamesShift(),
+  fetchLocation()
+];
+
+// Wait for all data-fetching promises to complete
+Promise.all(fetchPromises)
+  .finally(() => {
+    loading.value = false; // Hide loading modal once all data is fetched
+  });
+
+initTabulator();
+reInitOnResizeWindow();
+
+};
+
+interface Payload {
+  grnumber: string;
+  productcode: string;
+  date: string;
+  resourcecode: string;
+  shift: string;
+  vendorname: string;
+  vendorcode: string;
+  ponumber: string;
+  lotnumber: string;
+  nett: number;
+  gross: number;
+  uom: string;
+  qcrequired: boolean;
+  qualityCheckList: {
+    jobId: string;
+    resourceCode: string;
+    shift: string;
+    qcPassed: string;
+  }[];
+}
+
+
+// Update Role
+const updateRole = () => {
+  console.log('updateRole function called');
+
+  editFormData.formSubmitted = true;
+
+  const payload = {
+    grnumber: String(editFormData.grnumber),
+    productcode: String(editFormData.productcode),
+    date: String(editFormData.date),
+    resourcecode: String(editFormData.resourcecode),
+    shift: String(editFormData.shift),
+    vendorname: String(editFormData.vendorname),
+    vendorcode: String(editFormData.vendorcode),
+    ponumber: String(editFormData.ponumber),
+    lotnumber: String(editFormData.lotnumber),
+    nett: parseFloat(editFormData.nett),
+    gross: parseFloat(editFormData.gross),
+    uom: String(editFormData.uom),
+    location: String(editFormData.location),
+    qcrequired: true,
+    qualityCheckList: [{
+      jobId: String(editFormData.grnumber),
+      resourceCode: String(editFormData.resourcecode),
+      shift: String(editFormData.shift),
+      qcPassed: qcPassedValue.value
+    }],
+    listBoxesList: editFormData.listBoxesList.map(box => ({
+      jobId: String(editFormData.grnumber),
+      subLotNumber: String(box.subLotNumber),
+      nettWeight: box.nettWeight,
+      grossWeight: box.grossWeight,
+    })),
+    subLocList: [
+      {
+        name: editFormData.selectedSubLocation, // Only the selected sublocation is included in the array
+      }
+    ]
+  };
+
+  console.log('Payload prepared:', payload);
+
+  Swal.fire({
+    title: 'Are you sure?',
+    text: 'This will update the data!',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#1e40af',
+    cancelButtonColor: '#d33',
+    confirmButtonText: 'Yes, update it!',
+  }).then(result => {
+    if (result.isConfirmed) {
+      console.log('User confirmed the action');
+
+      axios.post(`http://10.87.0.33:8082/api/GRDetails/SubmitGRDetails`, payload)
+        .then(() => {
+          console.log('Payload submitted successfully');
+
+          if (editFormData.selectedFile) {
+            console.log('File selected:', editFormData.selectedFile);
+
+            const formData = new FormData();
+            formData.append('file', editFormData.selectedFile);
+
+            axios.post(`http://10.87.0.33:8082/api/Files?ModuleName=GR&grnoorjobid=${editFormData.grnumber}`, formData)
+              .then(() => {
+                console.log('File uploaded successfully');
+                setEditSlideOver(false);
+                updateTableData();
+                Swal.fire({
+                  icon: 'success',
+                  title: 'Updated Successfully',
+                  showConfirmButton: false,
+                  showCloseButton: true,
+                  timer: 5000,
+                  timerProgressBar: true,
+                  position: 'top-end',
+                  iconColor: 'green',
+                  toast: true,
+                  background: '#fff',
+                  showClass: {
+                    popup: 'animate__animated animate__fadeInUp',
+                  },
+                  hideClass: {
+                    popup: 'animate__animated animate__fadeOutUp',
+                  },
+                });
+              })
+              .catch(error => {
+                console.error('Error uploading file:', error);
+                handleError(error, 'Error uploading file');
+              });
+          } else {
+            console.log('No file selected for upload');
+            setEditSlideOver(false);
+            updateTableData();
+            Swal.fire({
+              icon: 'success',
+              title: 'Updated Successfully',
+              showConfirmButton: false,
+              showCloseButton: true,
+              timer: 5000,
+              timerProgressBar: true,
+              position: 'top-end',
+              iconColor: 'green',
+              toast: true,
+              background: '#fff',
+              showClass: {
+                popup: 'animate__animated animate__fadeInUp',
+              },
+              hideClass: {
+                popup: 'animate__animated animate__fadeOutUp',
+              },
+            });
+          }
         })
         .catch(error => {
-            console.error('Error fetching updated data:', error);
+          console.error('Error updating data:', error);
+          handleError(error, 'Error updating data');
         });
+    } else {
+      console.log('User cancelled the action');
+    }
+  });
 };
 
 
 
 // Add Role
 
-
-
-const addFormData = reactive({
-    grnumber: '',
-    powdercode: '',
-    vendorcode: '', // Use a separate property for storing the selected vendor code
-    ponumber: '',
-    lotnumber: '',
-    gross: '',
-    uom: '',
-    weight: '',
-    warehouselocation: '',
-    status: 'QCApprove',
-    vendorCodes: [] as any[], // Use a separate property for rendering the options in the dropdown
-    uoms: [] as string[], // Use a separate property for rendering the options in the dropdown
-    warehouseCodes: [] as string[], // Use a separate property for rendering the options in the dropdown
-    // Use a separate property for rendering the options in the dropdown
-});
-
-
-// Function to add new role
-
-const addRole = (status: 'draft' | 'submitted') => {
-    // Show a confirmation dialog before making the API call
+// Method to handle form validation and display error messages
+const validateForm = () => {
+  formSubmitted.value = true;
+  if (
+    !addFormData.productcode ||
+    !addFormData.resourcecode ||
+    !addFormData.shift ||
+    !addFormData.vendorname ||
+    !addFormData.vendorcode ||
+    !addFormData.ponumber ||
+    !addFormData.lotnumber ||
+    (!addFormData.nett || !isNumeric(addFormData.nett)) ||
+    (!addFormData.gross || !isNumeric(addFormData.gross)) ||
+    !addFormData.uom
+  ) {
     Swal.fire({
-        title: 'Confirmation',
-        text: `Are you sure you want to ${status === 'draft' ? 'save' : 'submit'} this role?`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#1e40af',
-        cancelButtonColor: '#d33',
-        confirmButtonText: `Yes, ${status === 'draft' ? 'save' : 'submit'} it!`,
-    }).then((result) => {
-        // If the user confirms, proceed with adding or saving the role
-        if (result.isConfirmed) {
-            // Set the status based on the button clicked
-            addFormData.status = status; // Set the status here
-
-            // Handle adding or saving a role (POST request)
-            axios.post('http://172.188.122.62:8085/api/GRDetails', {
-                grnumber: addFormData.grnumber,
-                powdercode: addFormData.powdercode,
-                vendorcode: addFormData.vendorcode,
-                ponumber: addFormData.ponumber,
-                lotnumber: addFormData.lotnumber,
-                gross: addFormData.gross,
-                // uom: addFormData.uom,
-                weight: addFormData.weight,
-                warehouselocation: addFormData.warehouselocation,
-                status: addFormData.status,
-            })
-                .then(response => {
-                    // Close the add slideover
-                    setAddSlideover(false);
-
-                    // Reset form data
-                    resetFormData();
-
-                    // Update table data after successful addition or save
-                    updateTableData(); // Function to update table data
-
-                    // Show success message
-                    Swal.fire({
-                        icon: 'success',
-                        title: `Role ${status === 'draft' ? 'Saved' : 'Submitted'} Successfully`,
-                        showConfirmButton: false,
-                        showCloseButton: true, // Show close button (X)
-                        timer: 5000,
-                        timerProgressBar: true, // Display timer progress bar
-                        position: 'top-end',
-                        iconColor: 'green',
-                        toast: true,
-                        background: '#fff',
-                        showClass: {
-                            popup: 'animate__animated animate__fadeInUp',
-                        },
-                        hideClass: {
-                            popup: 'animate__animated animate__fadeOutUp',
-                        },
-                    });
-
-                    console.log(`Role ${status === 'draft' ? 'saved' : 'submitted'} successfully:`, response.data.result);
-                })
-                .catch(error => {
-                    console.error(`Error ${status === 'draft' ? 'saving' : 'submitting'} role:`, error);
-                });
-        }
+      icon: 'error',
+      title: 'Please complete the field',
+      showConfirmButton: false,
+      showCloseButton: true,
+      timer: 5000,
+      timerProgressBar: true,
+      position: 'top-end',
+      iconColor: 'red',
+      toast: true,
+      background: '#fff',
     });
+    return false;
+  }
+  return true;
 };
 
-const fetchGRNumber = () => {
-    axios.get('http://172.188.122.62:8085/api/GRDetails/GetGRNo')
-        .then(response => {
-            // Assuming the response body contains the GR number as a string
-            addFormData.grnumber = response.data;
-        })
-        .catch(error => {
-            console.error('Error fetching GR number:', error);
+// Method to handle the Save button click event
+// Method to handle the Save button click event
+const saveRole = async () => {
+  if (validateForm()) {
+    const payload = {
+      grnumber: addFormData.grnumber,
+      productcode: addFormData.productcode,
+      date: addFormData.date,
+      resourcecode: addFormData.resourcecode,
+      shift: addFormData.shift,
+      vendorname: addFormData.vendorname,
+      vendorcode: addFormData.vendorcode,
+      ponumber: addFormData.ponumber,
+      lotnumber: addFormData.lotnumber,
+      nett: parseFloat(addFormData.nett), // Ensure numeric value
+      gross: parseFloat(addFormData.gross), // Ensure numeric value
+      uom: addFormData.uom
+    };
+
+    console.log('Payload for Save:', JSON.stringify(payload, null, 2)); // Log payload
+    try {
+      const response = await axios.post('http://10.87.0.33:8082/api/GRDetails/SaveGRDetails', payload);
+      console.log('API Response:', response);
+      if (response.status === 200 && response.data.result) {
+        Swal.fire({
+          icon: 'success',
+          title: 'Data Saved Successfully',
+          showConfirmButton: false,
+          showCloseButton: true,
+          timer: 5000,
+          timerProgressBar: true,
+          position: 'top-end',
+          iconColor: 'green',
+          toast: true,
+          background: '#fff',
         });
+        // Additional actions after successful save
+        setAddSlideover(false);
+        resetFormData(addFormData);
+        updateTableData();
+        fetchNamesShift();
+        fetchVendorName();
+        fetchVendorCode();
+        fetchGRDetails();
+        fetchUOM();
+        formSubmitted.value = false;
+      } else {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Unexpected response',
+          text: 'The data was not saved as expected.',
+          showConfirmButton: true,
+        });
+      }
+    } catch (error) {
+      console.error('Error saving data:', error);
+      handleError(error, 'Error deleting data');
+    }
+  }
 };
 
-const fetchVendorCode = () => {
-    axios.get('http://172.188.122.62:8085/api/VendorMaster/GetVendorDDL')
-        .then(response => {
-            const vendorData = response.data.result;
-
-            if (Array.isArray(vendorData)) {
-                // If it's an array, use the first element or handle multiple vendors as needed
-                addFormData.vendorcode = vendorData.length > 0 ? vendorData[0].vendorcode : '';
-                // Assign the array to addFormData.vendorCodes for rendering options in the dropdown
-                addFormData.vendorCodes = vendorData.map(item => item.vendorcode);
-                editFormData.vendorcode = vendorData.length > 0 ? vendorData[0].vendorcode : '';
-                // Assign the array to addFormData.vendorCodes for rendering options in the dropdown
-                editFormData.vendorCodes = vendorData.map(item => item.vendorcode);
-            } else if (typeof vendorData === 'object') {
-                // If it's an object, use its properties
-                addFormData.vendorcode = vendorData.vendorcode || '';
-                addFormData.vendorCodes = [vendorData.vendorcode]; // Set an array with a single value
-                editFormData.vendorcode = vendorData.vendorcode || '';
-                editFormData.vendorCodes = [vendorData.vendorcode]; // Set an array with a single value
+// Method to handle the Submit button click event
+const submitRole = () => {
+  if (validateForm()) {
+    Swal.fire({
+      title: 'Confirmation',
+      text: 'Are you sure you want to submit this role?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#1e40af',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, submit it!',
+    }).then(result => {
+      if (result.isConfirmed) {
+        const payload = {
+          grnumber: String(addFormData.grnumber),
+          productcode: String(addFormData.productcode),
+          date: String(addFormData.date),
+          resourcecode: String(addFormData.resourcecode),
+          shift: String(addFormData.shift),
+          vendorname: String(addFormData.vendorname),
+          vendorcode: String(addFormData.vendorcode),
+          ponumber: String(addFormData.ponumber),
+          lotnumber: String(addFormData.lotnumber),
+          nett: String(addFormData.nett),
+          gross: String(addFormData.gross),
+          uom: String(addFormData.uom),
+          qcrequired: Boolean(addFormData.qcrequired),
+          qualityCheckList: addFormData.qualityCheckList.map(item => ({
+            jobId: String(item.jobId),
+            resourceCode: String(item.resourceCode),
+            shift: String(item.shift),
+            qcPassed: Boolean(item.qcPassed)
+          })),
+          listBoxesList: addFormData.listBoxesList.map(box => ({
+            jobId: String(addFormData.grnumber),
+            subLotNumber: String(box.subLotNumber),
+            nettWeight: box.nettWeight || 0, // Direct assignment
+            grossWeight: box.grossWeight || 0, // Direct assignment
+          }))
+        };
+        axios.post('http://10.87.0.33:8082/api/GRDetails/SubmitGRDetails', payload)
+          .then(response => {
+            if (response.status === 200 && response.data.result) {
+              Swal.fire({
+                icon: 'success',
+                title: 'Role Submitted Successfully',
+                showConfirmButton: false,
+                showCloseButton: true,
+                timer: 5000,
+                timerProgressBar: true,
+                position: 'top-end',
+                iconColor: 'green',
+                toast: true,
+                background: '#fff',
+              });
+              setAddSlideover(false);
+              resetFormData(addFormData);
+              updateTableData();
+              fetchNamesShift();
+              fetchVendorName();
+              fetchVendorCode();
+              fetchGRDetails();
+              fetchUOM();
+              formSubmitted.value = false;
             } else {
-                console.error('Invalid response format for vendor data:', vendorData);
+              Swal.fire({
+                icon: 'warning',
+                title: 'Unexpected response',
+                text: 'The data was not submitted as expected.',
+                showConfirmButton: true,
+              });
             }
-        })
-        .catch(error => {
-            console.error('Error fetching vendor codes:', error);
-        });
-};
-
-
-const fetchWarehouseLocations = () => {
-    axios.get('http://172.188.122.62:8085/api/WarehouseLocation/GetWarehouseDDL')
-        .then(response => {
-            const warehouseData = response.data.result;
-
-            if (Array.isArray(warehouseData)) {
-                // If it's an array, use the first element or handle multiple warehouses as needed
-                addFormData.warehouselocation = warehouseData.length > 0 ? warehouseData[0].warehousecode : '';
-                // Assign the array to addFormData.warehouseCodes for rendering options in the dropdown
-                addFormData.warehouseCodes = warehouseData.map(item => item.warehousecode);
-                editFormData.warehouselocation = warehouseData.length > 0 ? warehouseData[0].warehousecode : '';
-                // Assign the array to addFormData.warehouseCodes for rendering options in the dropdown
-                editFormData.warehouseCodes = warehouseData.map(item => item.warehousecode);
-            } else if (typeof warehouseData === 'object') {
-                // If it's an object, use its properties
-                addFormData.warehouselocation = warehouseData.warehousecode || '';
-                addFormData.warehouseCodes = [warehouseData.warehousecode]; // Set an array with a single value
-                editFormData.warehouselocation = warehouseData.warehousecode || '';
-                editFormData.warehouseCodes = [warehouseData.warehousecode]; // Set an array with a single value
-            } else {
-                console.error('Invalid response format for warehouse data:', warehouseData);
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching warehouse locations:', error);
-        });
-};
-
-
-const fetchUOM = () => {
-    axios.get('http://172.188.122.62:8085/api/GRDetails/GetUOMDDL')
-        .then(response => {
-            const uomData = response.data.result;
-
-            if (Array.isArray(uomData)) {
-                // If it's an array, use the first element or handle multiple UOMs as needed
-                addFormData.uom = uomData.length > 0 ? uomData[0].uomcode : '';
-                // Assign the array to addFormData.uoms for rendering options in the dropdown
-                addFormData.uoms = uomData.map(item => item.uomcode);
-                editFormData.uom = uomData.length > 0 ? uomData[0].uomcode : '';
-                // Assign the array to addFormData.uoms for rendering options in the dropdown
-                editFormData.uoms = uomData.map(item => item.uomcode);
-            } else if (typeof uomData === 'object') {
-                // If it's an object, use its properties
-                addFormData.uom = uomData.uomcode || '';
-                addFormData.uoms = [uomData.uomcode]; // Set an array with a single value
-                editFormData.uom = uomData.uomcode || '';
-                editFormData.uoms = [uomData.uomcode]; // Set an array with a single value
-            } else {
-                console.error('Invalid response format for UOM:', uomData);
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching UOM:', error);
-        });
+          })
+          .catch(error => handleError(error, 'Error deleting data'));
+      }
+    });
+  }
 };
 
 
 
-
-
-
-const resetFormData = () => {
-    // Reset form data
-    addFormData.grnumber = '';
-    addFormData.vendorCodes = [] as any;
-    addFormData.powdercode = '';
-    addFormData.vendorcode = '';
-    addFormData.ponumber = '';
-    addFormData.lotnumber = '';
-    addFormData.gross = '';
-    addFormData.uom = '';
-    addFormData.weight = '';
-    addFormData.warehouselocation = '';
-    addFormData.status = 'active';
-};
-
-
+// Delete Role
 const deleteRole = (id: string) => {
-    // Ask for confirmation before deleting
-    Swal.fire({
-        title: 'Are you sure?',
-        text: 'You will not be able to recover this data!',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#1e40af',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Yes, delete it!',
-    }).then((result) => {
-        if (result.isConfirmed) {
-            // Make a DELETE request to remove data
-            axios.delete(`http://172.188.122.62:8085/api/GRDetails/${id}`)
-                .then(response => {
-                    // After successful deletion, update the table data
-                    updateTableData();
-                    console.log('Data deleted successfully:', response.data.result);
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Deleted Successfully',
-                        showConfirmButton: false,
-                        showCloseButton: true, // Show close button (X)
-                        timer: 5000,
-                        timerProgressBar: true, // Display timer progress bar
-                        position: 'top-end',
-                        iconColor: 'green',
-                        toast: true,
-                        background: '#fff',
-                        showClass: {
-                            popup: 'animate__animated animate__fadeInUp',
-                        },
-                        hideClass: {
-                            popup: 'animate__animated animate__fadeOutUp',
-                        },
-                    });
-                })
-                .catch(error => {
-                    console.error('Error deleting data:', error);
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Failed to Delete',
-                        text: 'Please try again',
-                    });
-                });
-        }
-    });
+  Swal.fire({
+    title: 'Are you sure?',
+    text: 'You will not be able to recover this data!',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#1e40af',
+    cancelButtonColor: '#d33',
+    confirmButtonText: 'Yes, delete it!',
+  }).then(result => {
+    if (result.isConfirmed) {
+      axios.delete(`${API_BASE_URL}${id}`)
+        .then(() => {
+          updateTableData();
+          Swal.fire({
+            icon: 'success',
+            title: 'Data Deleted Successfully',
+            showConfirmButton: false,
+            showCloseButton: true,
+            timer: 5000,
+            timerProgressBar: true,
+            position: 'top-end',
+            iconColor: 'green',
+            toast: true,
+            background: '#fff',
+            showClass: {
+              popup: 'animate__animated animate__fadeInUp',
+            },
+            hideClass: {
+              popup: 'animate__animated animate__fadeOutUp',
+            },
+          });
+        })
+        .catch(error => handleError(error, 'Error deleting data'));
+    }
+  });
 };
+
+// Reset Form Data
+const resetFormData = (formData: any) => {
+  Object.keys(formData).forEach((key) => {
+    if (typeof formData[key] === 'boolean') {
+      formData[key] = false;
+    } else if (typeof formData[key] === 'number') {
+      formData[key] = 0;
+    } else {
+      formData[key] = '';
+    }
+  });
+  formData.date = formatDate(new Date());
+  formData.status = '';
+};
+
+
 
 const addSlideover = ref(false);
 const setAddSlideover = (value: boolean) => {
-    addSlideover.value = value;
+  addSlideover.value = value;
 };
 
 const EditSlideOver = ref(false);
+
 const setEditSlideOver = (value: boolean) => {
-    EditSlideOver.value = value;
+  EditSlideOver.value = value;
+
+  if (!value) {
+    // Reset sublocation when closing
+    editFormData.subLocList = [];
+    editFormData.selectedSubLocation = '';
+
+    // Optionally refetch sublocations when closing
+    if (editFormData.location) {
+      fetchSubLocations(editFormData.location); // Removed the second argument 'edit'
+    }
+  } else {
+    // When opening, refetch sublocations
+    if (editFormData.location) {
+      fetchSubLocations(editFormData.location); // Removed the second argument 'edit'
+    }
+  }
 };
+
+const resetFileInput = () => {
+  editFormData.fileName = '';
+
+};
+
+watch(EditSlideOver, async (newVal) => {
+  if (!newVal) {
+    // Reset the file input when EditSlideOver is closed
+    resetFileInput();
+  } else {
+    // Fetch the file details again when EditSlideOver is opened
+    if (editFormData.grnumber) {
+      try {
+        const response = await axios.get('http://10.87.0.33:8082/api/Files', {
+          params: {
+            ModuleName: 'GR',
+            grnoorjobid: editFormData.grnumber,
+          },
+        });
+        const contentDisposition = response.headers['content-disposition'];
+        if (contentDisposition && contentDisposition.indexOf('attachment') !== -1) {
+          const matches = /filename="([^"]+)"/.exec(contentDisposition);
+          if (matches != null && matches[1]) {
+            const filename = matches[1];
+            const fileExtension = filename.split('.').pop();
+            editFormData.fileName = filename;
+          }
+        } else {
+          editFormData.fileName = `${editFormData.grnumber}-QC`;
+        }
+      } catch (error) {
+        console.error('Error fetching file details:', error);
+      }
+    }
+  }
+});
 
 const handleAddClick = (event: MouseEvent) => {
   event.preventDefault();
   setAddSlideover(true);
 };
 
+/// Define the ref
+const toPrint = ref<HTMLElement | null>(null);
+
+const printTable = (): void => {
+  const el = toPrint.value;
+  if (el) {
+    const newPrint = window.open("", "_blank");
+
+    if (newPrint) {
+      newPrint.document.write(`
+        <html>
+          <head>
+            <title>Goods Receiving Quality Check</title>
+            <style>
+              @media print {
+                table {
+                  border-collapse: collapse;
+                  width: 100%;
+                  font-family: Arial, Helvetica, sans-serif;
+                }
+                th, td {
+                  border: 1px solid #000; /* Set border color */
+                  padding: 8px;
+                  text-align: left;
+                  vertical-align: top;
+                }
+                th {
+                  background-color: #f2f2f2;
+                  font-weight: bold;
+                  color: #000; /* Set text color */
+                }
+                td {
+                  color: #000;
+                }
+                .title {
+                  text-align: center;
+                }
+                /* Status colors */
+                .text-green-600 {
+                  color: #166534;
+                }
+                .text-cyan-600 {
+                  color: #155e75;
+                }
+                .text-red-600 {
+                  color: #991b1b;
+                }
+                .text-orange-600 {
+                  color: #9a3412;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            <table class="w-full">
+              <tbody>
+                ${el.innerHTML}
+              </tbody>
+            </table>
+          </body>
+        </html>
+      `);
+
+      // Close the document to ensure it's fully loaded
+      newPrint.document.close();
+
+      // Wait for the content to be fully loaded, then print
+      newPrint.focus();  // Ensure the new window is focused
+
+      // Listen for the 'afterprint' event to close the window after printing
+      newPrint.onafterprint = () => {
+        newPrint.close();
+      };
+
+      // Trigger the print dialog
+      setTimeout(() => {
+        newPrint.print();
+      }, 500);  // 500ms delay to ensure content is fully loaded
+    }
+  }
+};
+
 </script>
 
 <template>
-    <div class="flex flex-col items-center mt-8 intro-y sm:flex-row">
-        <h2 class="mr-auto text-lg font-medium">Quality Check</h2>
-        <div class="flex w-full mt-4 sm:w-auto sm:mt-0">
-            <Button variant="primary" class="mr-2 shadow-md" as="a" href="#" @click="handleAddClick">
-                Add Quality Check
-            </Button>
-        </div>
+  <!-- Loading Modal Overlay -->
+  <div v-if="loading" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+    <div class="flex flex-col items-center">
+      <LoadingIcon icon="oval" class="w-8 h-8 text-white animate-spin" />
+      <p class="mt-2 text-white text-center text-lg">Loading...</p>
     </div>
-    <!-- BEGIN: HTML Table Data -->
-    <div class="p-5 mt-5 intro-y box mb-10">
-        <div class="flex flex-col mb-5 sm:flex-row sm:items-end xl:items-start">
-            <form id="tabulator-html-filter-form" class="xl:flex sm:mr-auto" @submit="(e) => {
-                e.preventDefault();
-                onFilter();
-            }">
-                <div class="items-center mt-2 sm:flex sm:mr-4 xl:mt-0">
-                    <label class="flex-none w-12 mr-2 xl:w-auto xl:flex-initial">
-                        GR
-                    </label>
-                    <FormInput id="tabulator-html-filter-id" v-model="filter.grnumber" type="text"
-                        class="mt-2 sm:w-40 2xl:w-full sm:mt-0" placeholder="Search GR Number..." />
-                </div>
-                <Button id="tabulator-html-filter-go" variant="primary" type="button"
-                class="w-full ml-10 mt-2 mr-2 sm: ml-0 sm:w-16 sm:mt-0 sm:ml-1" @click="onGRNumber">
-                    GR
-                </Button>
-                <div class="items-center mt-2 sm:flex sm:mr-4 xl:mt-0">
-                    <label class="flex-none w-12 mr-1 xl:w-auto xl:flex-initial">
-                        Start Date
-                    </label>
-                    <FormInput id="tabulator-html-filter-startDate" v-model="filter.startDate" type="date"
-                        class="mt-2 sm:w-40 2xl:w-full sm:mt-0" />
-                </div>
-                <div class="items-center mt-2 sm:flex sm:mr-4 xl:mt-0">
-                    <label class="flex-none w-12 mr-1 xl:w-auto xl:flex-initial">
-                        End Date
-                    </label>
-                    <FormInput id="tabulator-html-filter-endDate" v-model="filter.endDate" type="date"
-                        class="mt-2 sm:w-40 2xl:w-full sm:mt-0" />
-                </div>
-                <div class="mt-2 xl:mt-0">
-                    <Button id="tabulator-html-filter-go" variant="primary" type="button" class="w-full sm:w-16"
-                        @click="onFilter">
-                        Date
-                    </Button>
+  </div>
+  <div class="flex flex-col items-center mt-8 intro-y sm:flex-row">
+    <h2 class="mr-auto text-lg font-medium">Quality Check</h2>
+  </div>
+  <!-- BEGIN: HTML Table Data -->
+  <div class="p-5 mt-5 intro-y box mb-10">
+    <div class="flex flex-col mb-5 sm:flex-row sm:items-end xl:items-start">
+      <form id="tabulator-html-filter-form" class="xl:flex sm:mr-auto" @submit="(e) => {
+        e.preventDefault();
+        onFilter();
+      }">
+        <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between mt-2">
+          <div class="flex-1 xl:mr-6">
+            <label class="flex-none w-full xl:w-auto xl:flex-initial">PO Number</label>
+            <div class="relative">
+              <FormInput id="tabulator-html-filter-id" v-model="filter.ponumber" type="text" class="mt-2 w-full"
+                placeholder="Search PO Number..." />
+              <Button id="tabulator-html-filter-new-go" variant="primary" type="button"
+                class="w-[100%] top-0 right-0 mt-2" @click="ponumber">PO Number</Button>
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between mt-2">
+          <div class="flex-1 xl:mr-6">
+            <label class="flex-none w-full xl:w-auto xl:flex-initial">Powder Number</label>
+            <div class="relative">
+              <FormInput id="tabulator-html-filter-id" v-model="filter.productcode" type="text" class="mt-2 w-full"
+                placeholder="Search Powder Number..." />
+              <Button id="tabulator-html-filter-new-go" variant="primary" type="button"
+                class="w-[100%] top-0 right-0 mt-2" @click="productcode">Powder Number</Button>
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between mt-2">
+          <div class="flex-1 xl:mr-6">
+            <label class="flex-none w-12 xl:w-auto xl:flex-initial">Status</label>
+            <div class="relative">
+              <FormSelect id="tabulator-html-filter-id" v-model="filter.status" class="mt-2 w-full"
+                aria-label="Default select example">
+                <option disabled value="">Select a Status Option</option>
+                <option selected>Completed</option>
+                <option>Pending</option>
+              </FormSelect>
+              <Button id="tabulator-html-filter-new-go" variant="primary" type="button"
+                class="w-[100%] top-0 right-0 mt-2" @click="onStatus">Status</Button>
+            </div>
+          </div>
+        </div>
+        <div class=" flex-col xl:flex-row xl:items-center xl:justify-between mt-2">
+          <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
 
-                    <Button id="tabulator-html-filter-reset" variant="secondary" type="button"
-                    class="w-full ml-10 mt-2 sm: ml-0 sm:w-16 sm:mt-0 sm:ml-1" @click="onResetFilter">
-                        Reset
-                    </Button>
+            <div class="flex">
+              <div class="flex-1">
+                <label class="flex-none w-12 xl:w-auto xl:flex-initial">Start Date</label>
+                <div class="relative">
+                  <FormInput id="tabulator-html-filter-id" v-model="filter.startDate" type="date" class="mt-2 w-full" />
                 </div>
-            </form>
-            <div class="flex mt-5 sm:mt-0">
-                <Button id="tabulator-print" variant="outline-primary" class="w-1/2 mr-2 sm:w-auto" @click="onPrint">
-                    <Lucide icon="Printer" class="w-4 h-4 mr-2" /> Print
-                </Button>
+
+              </div>
 
             </div>
-        </div>
-        <div class="overflow-x-auto scrollbar-hidden">
-            <div id="tabulator" ref="tableRef" class="mt-5"></div>
-        </div>
-    </div>
-    <!-- END: HTML Table Data -->
-    <Slideover :open="addSlideover" @close="() => {
-                setAddSlideover(false);
-            }
-                ">
-        <Slideover.Panel>
-            <Slideover.Title class="p-5">
-                <h2 class="mr-auto text-base font-medium">
-                    Add Quality Check
-                </h2>
-            </Slideover.Title>
-            <Slideover.Description>
-                <form class="validate-form">
-
-                    <div>
-                        <FormLabel htmlFor="regular-form-1">GR Number</FormLabel>
-                        <FormInput id="regular-form-1" v-model="addFormData.grnumber" type="text"
-                            placeholder="GR Number" disabled />
-                    </div>
-                    <div class="mt-5">
-                        <FormLabel htmlFor="regular-form-1">Powder Code</FormLabel>
-                        <FormInput id="regular-form-1" v-model="addFormData.powdercode" type="text"
-                            placeholder="Powder Code" />
-                    </div>
-                    <div class="mt-5">
-                        <label for="vendor-dropdown">Vendor</label>
-                        <FormSelect class="mt-2" id="vendor-dropdown" v-model="addFormData.vendorcode">
-                            <option v-for="vendorCode in addFormData.vendorCodes" :key="vendorCode" :value="vendorCode">
-                                {{ vendorCode }}
-                            </option>
-                        </FormSelect>
-                    </div>
-
-                    <div class="mt-5">
-                        <FormLabel htmlFor="regular-form-1">PO Number</FormLabel>
-                        <FormInput id="regular-form-1" v-model="addFormData.ponumber" type="text"
-                            placeholder="PO Number" />
-                    </div>
-                    <div class="mt-5">
-                        <FormLabel htmlFor="regular-form-1">Lot Number</FormLabel>
-                        <FormInput id="regular-form-1" v-model="addFormData.lotnumber" type="text"
-                            placeholder="Lot Number" />
-                    </div>
-                    <div class="mt-5">
-                        <label for="vendor-dropdown">UOM</label>
-                        <FormSelect class="mt-2" id="vendor-dropdown" v-model="addFormData.uom">
-                            <option v-for="uoms in addFormData.uoms" :key="uoms" :value="uoms">
-                                {{ uoms }}
-                            </option>
-                        </FormSelect>
-                    </div>
-                    <div class="mt-5">
-                        <FormLabel htmlFor="regular-form-1">Gross</FormLabel>
-                        <FormInput id="regular-form-1" v-model="addFormData.gross" type="text" placeholder="Gross" />
-                    </div>
-                    <div class="mt-5">
-                        <FormLabel htmlFor="regular-form-1">Weight</FormLabel>
-                        <FormInput id="regular-form-1" v-model="addFormData.weight" type="text" placeholder="Weight" />
-                    </div>
-                    <div class="mt-5">
-                        <label for="warehouse-dropdown">Warehouse</label>
-                        <FormSelect class="mt-2" id="warehouse-dropdown" v-model="addFormData.warehouselocation">
-                            <option v-for="warehouseCode in addFormData.warehouseCodes" :key="warehouseCode"
-                                :value="warehouseCode">
-                                {{ warehouseCode }}
-                            </option>
-                        </FormSelect>
-                    </div>
-                    <Button variant="primary" class="w-[100%] mt-10 shadow-md"
-                        @click.prevent="() => addRole('submitted')">
-                        Submit
-                    </Button>
-
-                    <Button variant="outline-primary" class="w-[100%] mr-2 mt-2 shadow-md"
-                        @click.prevent="() => addRole('draft')">
-                        Save
-                    </Button>
-
-
-
-                </form>
-            </Slideover.Description>
-            <Slideover.Footer>
-                <Button variant="outline-secondary" type="button" @click="() => {
-                setAddSlideover(false);
-            }
-                " class="w-20 mr-1">
-                    Cancel
-                </Button>
-
-            </Slideover.Footer>
-        </Slideover.Panel>
-    </Slideover>
-    <Slideover :open="EditSlideOver" @close="() => {
-                setEditSlideOver(false);
-            }
-                ">
-        <Slideover.Panel>
-            <Slideover.Title class="p-5">
-                <h2 class="mr-auto text-base font-medium">
-                    Edit Quality Check
-                </h2>
-            </Slideover.Title>
-            <Slideover.Description>
-                <form class="validate-form">
-                    <div>
-                        <FormLabel htmlFor="regular-form-1">GR Number</FormLabel>
-                        <FormInput id="regular-form-1" v-model="editFormData.grnumber" type="text"
-                            placeholder="GR Number" disabled />
-                    </div>
-                    <div>
-                        <FormLabel htmlFor="regular-form-1">Vendor</FormLabel>
-                        <FormInput id="regular-form-1" v-model="editFormData.vendorcode" type="text"
-                            placeholder="GR Number" disabled />
-                    </div>
-                    <div class="mt-5">
-                        <FormLabel htmlFor="regular-form-1">PO Number</FormLabel>
-                        <FormInput id="regular-form-1" v-model="editFormData.ponumber" type="text"
-                            placeholder="PO Number" disabled />
-                    </div>
-                    <div class="mt-5">
-                        <FormLabel htmlFor="regular-form-1">Lot Number</FormLabel>
-                        <FormInput id="regular-form-1" v-model="editFormData.lotnumber" type="text"
-                            placeholder="Lot Number" disabled />
-                    </div>
-                    <div class="mt-5">
-                        <FormLabel htmlFor="regular-form-1">Powder Partial Size</FormLabel>
-                        <FormInput id="regular-form-1" type="text"
-                            placeholder="Powder Partial Size" />
-                    </div>
-                    <div class="mt-5">
-                        <FormLabel htmlFor="regular-form-1">MV</FormLabel>
-                        <FormInput id="regular-form-1" type="text"
-                            placeholder="MV" />
-                    </div>
-                    <div class="mt-5">
-                        <FormLabel htmlFor="regular-form-1">D10</FormLabel>
-                        <FormInput id="regular-form-1" type="text"
-                            placeholder="D10" />
-                    </div>
-                    <div class="mt-5">
-                        <FormLabel htmlFor="regular-form-1">D50</FormLabel>
-                        <FormInput id="regular-form-1" type="text"
-                            placeholder="D50" />
-                    </div>
-                    <div class="mt-5">
-                        <FormLabel htmlFor="regular-form-1">D90</FormLabel>
-                        <FormInput id="regular-form-1" type="text"
-                            placeholder="D90" />
-                    </div>
-                    <div class="mt-5">
-                        <FormLabel htmlFor="regular-form-1">Bulk Density</FormLabel>
-                        <FormInput id="regular-form-1" type="text"
-                            placeholder="Bulk Density" />
-                    </div>
-                    <Button variant="primary" class="w-[100%] mt-10 shadow-md"
-                        @click.prevent="() => updateRole('QCApprove')">
-                        Approve
-                    </Button>
-
-                    <Button variant="outline-primary" class="w-[100%] mr-2 mt-2 shadow-md"
-                        @click.prevent="() => updateRole('QCReject')">
-                        Reject
-                    </Button>
-                </form>
-            </Slideover.Description>
-            <Slideover.Footer>
-                <Button variant="outline-secondary" type="button" @click="() => {
-                setEditSlideOver(false);
-            }
-                " class="w-20 mr-1">
-                    Cancel
-                </Button>
-
-
-            </Slideover.Footer>
-        </Slideover.Panel>
-    </Slideover>
-
-
-    <!-- BEGIN: Modal Content -->
-    <Dialog size="lg" :open="viewModal" @close="() => {
-                setviewModal(false);
-            }
-                ">
-        <Dialog.Panel>
-            <Dialog.Title>
-                <h2 class="mr-auto text-base font-medium">
-                    View Warehouse
-                </h2>
-            </Dialog.Title>
-            <Dialog.Description>
-                <div class="relative overflow-x-auto shadow-md sm:rounded-lg">
-                    <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
-                        <tbody class="w-[100%]">
-                            <tr class="border-b border-gray-200 dark:border-gray-700">
-                                <th scope="row"
-                                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
-                                    GR Number
-                                </th>
-                                <td class="w-[50%] px-auto text-center text-gray-700">
-                                    {{ viewData.grnumber }}
-                                </td>
-                            </tr>
-                            <tr class="border-b border-gray-200 dark:border-gray-700">
-                                <th scope="row"
-                                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
-                                    Powder Code
-                                </th>
-                                <td class="w-[50%] px-auto text-center text-gray-700">
-                                    {{ viewData.powdercode }}
-                                </td>
-                            </tr>
-                            <tr class="border-b border-gray-200 dark:border-gray-700">
-                                <th scope="row"
-                                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
-                                    Vendor Code
-                                </th>
-                                <td class="w-[50%] px-auto text-center text-gray-700">
-                                    {{ viewData.vendorcode }}
-                                </td>
-                            </tr>
-                            <tr class="border-b border-gray-200 dark:border-gray-700">
-                                <th scope="row"
-                                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
-                                    PO Number
-                                </th>
-                                <td class="w-[50%] px-auto text-center text-gray-700">
-                                    {{ viewData.ponumber }}
-                                </td>
-                            </tr>
-                            <tr class="border-b border-gray-200 dark:border-gray-700">
-                                <th scope="row"
-                                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
-                                    Gross
-                                </th>
-                                <td class="w-[50%] px-auto text-center text-gray-700">
-                                    {{ viewData.gross }}
-                                </td>
-                            </tr>
-                            <tr class="border-b border-gray-200 dark:border-gray-700">
-                                <th scope="row"
-                                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
-                                    UOM
-                                </th>
-                                <td class="w-[50%] px-auto text-center text-gray-700">
-                                    {{ viewData.uom }}
-                                </td>
-                            </tr>
-                            <tr class="border-b border-gray-200 dark:border-gray-700">
-                                <th scope="row"
-                                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
-                                    Weight
-                                </th>
-                                <td class="w-[50%] px-auto text-center text-gray-700">
-                                    {{ viewData.weight }}
-                                </td>
-                            </tr>
-                            <tr class="border-b border-gray-200 dark:border-gray-700">
-                                <th scope="row"
-                                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
-                                    Warehouse Location
-                                </th>
-                                <td class="w-[50%] px-auto text-center text-gray-700">
-                                    {{ viewData.warehouselocation }}
-                                </td>
-                            </tr>
-                            <tr class="border-b border-gray-200 dark:border-gray-700">
-                                <th scope="row"
-                                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
-                                    Status
-                                </th>
-                                <td class="w-[50%] px-auto text-center">
-                                    <span :class="{
-                'text-green-700': viewData.status === 'submitted' || viewData.status === 'WHApprove' || viewData.status === 'QCApprove',
-                'text-red-700': viewData.status === 'WHReject' || viewData.status === 'QCReject'
-            }">
-                                        {{
-                viewData.status === 'submitted' ? 'Submitted' :
-                    viewData.status === 'draft' ? 'Draft' :
-                        viewData.status === 'WHApprove' ? 'WH Approved' :
-                            viewData.status === 'WHReject' ? 'WH Rejected' :
-                                viewData.status === 'QCApprove' ? 'QC Approved' :
-                                        viewData.status === 'QCReject' ? 'QC Rejected' : 'Unknown'
-                                        }}
-                                    </span>
-                                </td>
-
-
-                            </tr>
-
-                        </tbody>
-                    </table>
+            <div class="flex">
+              <div class="flex-1">
+                <label class="flex-none w-12 xl:w-auto xl:flex-initial">Start Date</label>
+                <div class="relative">
+                  <FormInput id="tabulator-html-filter-id" v-model="filter.endDate" type="date" class="mt-2 w-full" />
                 </div>
-            </Dialog.Description>
-            <Dialog.Footer>
-                <Button type="button" variant="outline-secondary" @click="() => {
-                setviewModal(false);
-            }
-                " class="w-20 mr-1">
-                    Close
-                </Button>
-            </Dialog.Footer>
-        </Dialog.Panel>
-    </Dialog>
-    <!-- END: Modal Content -->
+
+              </div>
+
+            </div>
+          </div>
+
+          <div>
+
+            <Button id="tabulator-html-filter-new-go" variant="primary" type="button" class="w-full top-0 right-0 mt-2"
+              @click="onFilter">
+              Date</Button>
+          </div>
+        </div>
+      </form>
+      <div class="flex mt-5 sm:mt-0">
+        <Button id="tabulator-print" variant="outline-secondary" class="w-1/2 mr-2 sm:w-auto" @click="onResetFilter">
+          Reset
+        </Button>
+
+        <Button id="tabulator-print" variant="outline-primary" class="w-1/2 mr-2 sm:w-auto" @click="onPrint">
+          <Lucide icon="Printer" class="w-4 h-4 mr-2" /> Print
+        </Button>
+
+
+      </div>
+    </div>
+    <div class="overflow-x-auto scrollbar-hidden">
+      <div id="tabulator" ref="tableRef" class="mt-5"></div>
+    </div>
+  </div>
+
+  <Dialog
+:staticBackdrop="true" size="xl" :open="EditSlideOver" @close="() => {
+    setEditSlideOver(false);
+  }">
+    <Dialog.Panel>
+      <Dialog.Title class="p-5">
+        <h2 class="mr-auto text-base font-medium">
+          Edit Quality Check
+        </h2>
+      </Dialog.Title>
+      <Dialog.Description class="max-h-[70vh] overflow-y-auto">
+        <form class="validate-form" @submit.prevent="updateRole">
+
+          <div>
+            <FormLabel htmlFor="regular-form-1">PO Number</FormLabel>
+            <FormInput id="regular-form-1" v-model="editFormData.ponumber" type="text" placeholder="PO Number"
+              disabled />
+          </div>
+          <div class="mt-5">
+            <FormLabel htmlFor="regular-form-gr">GR Number</FormLabel>
+            <FormInput v-model="editFormData.grnumber" id="regular-form-gr" type="text" disabled />
+          </div>
+          <div class="mt-5">
+            <FormLabel htmlFor="regular-form-1">Powder Number</FormLabel>
+            <FormInput id="regular-form-1" v-model="editFormData.productcode" type="text" placeholder="Powder Number"
+              disabled />
+          </div>
+          <div class="mt-5">
+            <FormLabel htmlFor="regular-form-1">Resource ID</FormLabel>
+            <FormInput id="regular-form-1" v-model="editFormData.resourcecode" type="text" placeholder="Resource ID"
+              disabled />
+          </div>
+          <div class="relative  shadow-md sm:rounded-lg mt-5">
+            <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
+              <tbody class="w-[100%]">
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="px-4 py-2 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                    Vendor Name
+                  </th>
+                  <th scope="row"
+                    class="px-4 py-2 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                    Vendor Code
+                  </th>
+                </tr>
+                <tr>
+                  <td class="px-4 py-2 text-center text-gray-700 dark:text-white">
+                    <FormLabel htmlFor="vendor-name" class="sr-only">Vendor Name</FormLabel>
+                    <FormInput id="vendor-name" v-model="editFormData.vendorname" type="text" placeholder="Vendor Name"
+                      disabled />
+                  </td>
+                  <td class="px-4 py-2 text-center text-gray-700 dark:text-white">
+                    <FormLabel htmlFor="vendor-code" class="sr-only">Vendor Code</FormLabel>
+                    <FormInput id="vendor-code" v-model="editFormData.vendorcode" type="text" placeholder="Vendor Code"
+                      disabled />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mt-5">
+            <FormLabel htmlFor="regular-form-1">Lot Number</FormLabel>
+            <FormInput id="regular-form-1" v-model="editFormData.lotnumber" type="text" placeholder="Lot Number"
+              disabled />
+          </div>
+          <div class="mt-5 hidden">
+            <FormLabel htmlFor="regular-form-8">Weight</FormLabel>
+            <FormInput id="regular-form-8" v-model="editFormData.nett" type="text" placeholder="Nett" disabled />
+          </div>
+          <div class="relative shadow-md sm:rounded-lg mt-5">
+            <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
+              <tbody class="w-[100%]">
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="px-4 py-2 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                    Weight
+                  </th>
+                  <th scope="row"
+                    class="px-4 py-2 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                    UOM
+                  </th>
+                </tr>
+                <tr>
+                  <td class="px-4 py-2 text-center text-gray-700 dark:text-white">
+                    <FormLabel htmlFor="regular-form-8" class="sr-only">Weight</FormLabel>
+                    <FormInput id="regular-form-8" v-model="editFormData.gross" type="text" placeholder="Gross"
+                      disabled />
+                  </td>
+                  <td class="px-4 py-2 text-center text-gray-700 dark:text-white">
+                    <FormLabel htmlFor="regular-form-gr" class="sr-only">UOM</FormLabel>
+                    <FormInput v-model="editFormData.uom" id="regular-form-gr" type="text" disabled />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mt-5" v-if="editFormData.listBoxesList.length > 0">
+            <h3 class="mb-2 mt-8 text-lg font-medium leading-none">Box Details</h3>
+            <hr />
+            <table class="min-w-full border-collapse rounded-lg overflow-hidden shadow-sm">
+              <thead class="bg-primary text-white">
+                <tr>
+                  <th class="py-2 px-4 border-b text-center w-auto">Sub Lot Number</th>
+                  <th class="py-2 px-4 border-b text-center hidden">Nett Weight</th>
+                  <th class="py-2 px-4 border-b text-center">Weight</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(box, index) in editFormData.listBoxesList" :key="index" class="hover:bg-gray-100">
+                  <td class="py-2 px-4 border-b text-center">
+                    {{ box.subLotNumber }}
+                  </td>
+                  <td class="py-2 px-4 border-b small-width hidden">
+                    {{ box.nettWeight }}
+                  </td>
+                  <td class="py-2 px-4 border-b small-width text-center">
+                    {{ box.grossWeight }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="relative  shadow-md sm:rounded-lg mt-5">
+            <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
+              <tbody class="w-[100%]">
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="px-4 py-2 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                    Main Location
+                  </th>
+                  <th scope="row"
+                    class="px-4 py-2 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                    Sub Location
+                  </th>
+                </tr>
+                <tr>
+                  <td class="px-4 py-2 text-center text-gray-700 dark:text-white">
+                    <!-- Main Location Dropdown -->
+                    <FormLabel htmlFor="edit-form-5" class="sr-only">Main Location</FormLabel>
+                    <div class="relative">
+                      <div
+                        :class="['border rounded', { 'border-red-500': formSubmitted && !editFormData.location, 'border-gray-300': !(formSubmitted && !editFormData.location) }]">
+                        <div class="relative">
+                          <div @click="toggleEditLocationDropdown" class="cursor-pointer p-2">
+                            {{ selectedEditLocation || 'Select a Main Location Option' }}
+                          </div>
+                          <div v-if="isEditLocationDropdownOpen"
+                            class="absolute left-0 top-full w-full bg-white shadow-md z-10">
+                            <input type="text" v-model="editLocationSearchQuery" placeholder="Search Location"
+                              class="border-b border-gray-300 p-2 w-full" />
+                            <ul class="max-h-40 overflow-y-auto">
+                              <li v-for="location in filteredEditLocations" :key="location"
+                                @click="selectEditLocation(location)" class="cursor-pointer p-2 hover:bg-gray-100">
+                                {{ location }}
+                              </li>
+                              <li v-if="filteredEditLocations.length === 0" class="p-2 text-gray-500">No results found
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <span v-if="formSubmitted && !editFormData.location" class="text-red-500">Main Location is
+                      required!</span>
+                  </td>
+
+                  <td class="px-4 py-2 text-center text-gray-700 dark:text-white">
+                    <!-- Sub Location Dropdown -->
+                    <FormLabel htmlFor="subloc-form-5" class="sr-only">Sub Location</FormLabel>
+                    <div class="relative" v-if="editFormData.locations.length > 0">
+                      <div class="border border-gray-300 rounded">
+                        <div class="relative">
+                          <div @click="toggleEditSubLocationDropdown" class="cursor-pointer p-2"
+                            :class="{ 'cursor-not-allowed': !editFormData.location || editFormData.subLocList.length === 0 }"
+                            :style="{ opacity: !editFormData.location || editFormData.subLocList.length === 0 ? 0.6 : 1 }"
+                            :disabled="!editFormData.location || editFormData.subLocList.length === 0">
+                            {{ selectedEditSubLocation || 'Select a Sub Location' }}
+                          </div>
+                          <div v-if="isEditSubLocationDropdownOpen && editFormData.subLocList.length > 0"
+                            class="absolute left-0 top-full w-full bg-white shadow-md z-10">
+                            <input type="text" v-model="editSubLocationSearchQuery" placeholder="Search Sub Location"
+                              class="border-b border-gray-300 p-2 w-full" />
+                            <ul class="max-h-40 overflow-y-auto">
+                              <li v-for="subloc in filteredEditSubLocations" :key="subloc.name"
+                                @click="selectEditSubLocation(subloc.name)"
+                                class="cursor-pointer p-2 hover:bg-gray-100">
+                                {{ subloc.name }}
+                              </li>
+                              <li v-if="filteredEditSubLocations.length === 0" class="p-2 text-gray-500">No results
+                                found</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="mt-5">
+            <FormLabel htmlFor="file-upload">Upload File</FormLabel>
+            <!-- <input type="file" id="file-upload" @change="handleFileUpload" />
+      <span v-if="editFormData.fileName">Selected file: {{ editFormData.fileName }}</span> -->
+
+            <label
+              class="flex cursor-pointer appearance-none justify-center rounded-md border border-dashed border-gray-300 bg-white px-3 py-6 text-sm transition hover:border-gray-400 focus:border-solid focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+              :class="{ 'cursor-not-allowed': editFormData.status === 'Completed' || editFormData.status === 'QC Rejected' }"
+              tabindex="0">
+              <div>
+                <span for="photo-dropbox" class="flex items-center space-x-2">
+                  <svg class="h-6 w-6 stroke-gray-400" viewBox="0 0 256 256">
+                    <path d="M96,208H72A56,56,0,0,1,72,96a57.5,57.5,0,0,1,13.9,1.7" fill="none" stroke-linecap="round"
+                      stroke-linejoin="round" stroke-width="24"></path>
+                    <path d="M80,128a80,80,0,1,1,144,48" fill="none" stroke-linecap="round" stroke-linejoin="round"
+                      stroke-width="24"></path>
+                    <polyline points="118.1 161.9 152 128 185.9 161.9" fill="none" stroke-linecap="round"
+                      stroke-linejoin="round" stroke-width="24"></polyline>
+                    <line x1="152" y1="208" x2="152" y2="128" fill="none" stroke-linecap="round" stroke-linejoin="round"
+                      stroke-width="24"></line>
+                  </svg>
+                  <span class="text-md font-medium text-gray-600">
+                    Click to Attach the Files <br>
+                  </span>
+
+                </span>
+
+                <FormInput id="photo-dropbox" type="file" class="sr-only"
+                  :disabled="editFormData.status === 'Completed' || editFormData.status === 'QC Rejected'"
+                  @change="editFormData.status !== 'Completed' && editFormData.status !== 'QC Rejected' ? handleFileUpload($event) : null" />
+                <div class="mt-2 flex flex-col " v-if="editFormData.fileName">
+                  <div class="flex justify-center mt-2 text-xs font-medium text-gray-600">
+                    <span>pdf, png ,jpg, jpeg, xls, docx</span>
+                  </div>
+                </div>
+                <div class="mt-3 flex flex-col " v-if="editFormData.fileName">
+                  <div class="flex flex-row justify-center">
+                    <button @click.prevent="downloadFile"
+                      class=" bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md shadow-md flex items-center">
+                      <span>Download File</span>
+                      <Lucide icon="Download" class="w-5 h-5 ml-2 " :stroke-width="2" />
+                    </button>
+                  </div>
+
+                </div>
+
+              </div>
+            </label>
+          </div>
+
+          <!-- Add a button to trigger the file download -->
+
+
+          <div class="mt-5">
+            <FormLabel htmlFor="qcPassed">Quality Check Status</FormLabel>
+            <FormSelect v-model="qcPassedValue" id="qcPassed" class="sm:mr-2">
+              <option value="true">Approve</option>
+              <option value="false">Reject</option>
+            </FormSelect>
+          </div>
+          <div class="mt-5 hidden" v-if="editFormData.locations.length > 0">
+            <!-- Sub Location Dropdown -->
+            <FormLabel htmlFor="subloc-form-5">Sub Location</FormLabel>
+            <FormSelect v-model="editFormData.selectedSubLocation" :disabled="editFormData.subLocList.length === 0"
+              class="sm:mr-2 mt-2" aria-label="Select a sub location">
+              <option disabled value="">Select a Sub Location</option>
+              <option v-for="subloc in editFormData.subLocList" :key="subloc.name" :value="subloc.name">
+                {{ subloc.name }}
+              </option>
+            </FormSelect>
+          </div>
+          <Button variant="primary" class="w-[100%] mr-2 mt-10 shadow-md">
+            Submit
+          </Button>
+        </form>
+      </Dialog.Description>
+      <Dialog.Footer>
+        <Button variant="outline-secondary" type="button" @click="() => {
+          setEditSlideOver(false);
+        }" class="w-20 mr-1">
+          Cancel
+        </Button>
+      </Dialog.Footer>
+    </Dialog.Panel>
+  </Dialog>
+
+
+  <!-- BEGIN: Modal Content -->
+  <Dialog
+:staticBackdrop="true" size="xl" :open="viewModal" @close="() => {
+    setviewModal(false);
+  }
+    ">
+    <Dialog.Panel>
+      <Dialog.Title>
+        <h2 class="w-100 mr-auto text-base font-medium">
+          View Quality Check
+        </h2>
+      </Dialog.Title>
+      <Dialog.Description class="max-h-[70vh] overflow-y-auto">
+        <div class="relative overflow-x-auto shadow-md sm:rounded-lg">
+          <div class="lg:flex lg:flex-row">
+            <div class="absolute top-0 left-0 w-full h-full" id="printJS-page" ref="toPrint" style="display: none;">
+              <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
+                <tbody class="w-[100%]">
+                  <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary  dark:bg-gray-800">
+                    PO Number
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.ponumber }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800  ">
+                    GR Number
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.grnumber }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800  ">
+                    Powder Number
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.productcode }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                    Date
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ formattedDate }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800 ">
+                    Employee ID
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white dark:text-white ">
+                    {{ viewData.resourcecode }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary  dark:bg-gray-800">
+                    Main Location
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.location }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:bg-gray-800">
+                    Sub Location
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.selectedSubLocation || 'No Sub Location Available' }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary  dark:bg-gray-800">
+                    Vendor Name
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.vendorname }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary  dark:bg-gray-800">
+                    Vendor Code
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.vendorcode }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary  dark:bg-gray-800">
+                    Lot Number
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.lotnumber }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary  dark:bg-gray-800">
+                    Weight
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.nett }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary  dark:bg-gray-800">
+                    UOM
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.uom }}
+                  </td>
+                </tr>
+                  <!-- <tr class="border-b border-gray-200 dark:border-gray-700">
+                    <th scope="row"
+                      class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                      Warehouse
+                    </th>
+                    <td class="w-[50%] px-auto text-center ">
+                      <span :class="{ 'text-red-600 ': !viewData.whrequired, 'text-green-600': viewData.whrequired }">
+                        {{ viewData.whrequired ? 'Required' : 'Not Required' }}
+                        <i v-if="viewData.whrequired" class="far fa-circle-check"></i>
+                        <i v-if="!viewData.whrequired" class="fa-regular fa-circle-xmark"></i>
+                      </span>
+                    </td>
+                  </tr> -->
+                  <tr class="border-b border-gray-200 dark:border-gray-700">
+                    <th scope="row"
+                      class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                      Job Status
+                    </th>
+                    <td class="w-[50%] px-auto text-center">
+                      <span :class="{
+                        'text-green-600': viewData.status === 'Completed',
+                        'text-yellow-600': viewData.status === 'Pending',
+                        'text-red-600': viewData.status === 'QC Rejected',
+                        'text-orange-600': viewData.status === 'Draft',
+                        'text-gray-600': !viewData.status || viewData.status === ''
+                      }">
+                        {{ viewData.status || 'N/A' }}
+                      </span>
+                    </td>
+                  </tr>
+
+                </tbody>
+              </table>
+              <div class="relative overflow-x-auto shadow-md sm:rounded-lg mt-10"
+                v-if="viewData.listBoxesList.length > 0">
+                <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
+                  <tbody class="w-[100%]">
+                    <tr class="border-b border-gray-200 dark:border-gray-700">
+                      <th scope="col" colspan="3"
+                        class="title px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-blue-900 dark:text-white dark:bg-gray-800">
+                        Box Details
+                      </th>
+                    </tr>
+                    <tr>
+                      <th scope="row"
+                        class="title text-center px-4 py-4 font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800 ">
+                        Sub Lot Number
+                      </th>
+                      <th scope="row"
+                        class="title text-center px-4 py-4 font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800 ">
+                        Nett Weight
+                      </th>
+                      <th scope="row"
+                        class="title px-4 py-2 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                        Gross Weight
+                      </th>
+                    </tr>
+                    <tr v-for="(box, index) in viewData.listBoxesList" :key="index"
+                      class="hover:bg-gray-100 dark:hover:bg-gray-100">
+                      <td class="title py-3 px-3 text-gray-700 dark:text-white text-center">
+                        {{ box.subLotNumber }}
+                      </td>
+                      <td class="title py-3 px-3 text-gray-700 dark:text-white text-center">
+                        {{ box.nettWeight }}
+                      </td>
+                      <td class="title py-3 px-3 text-gray-700 dark:text-white text-center">
+                        {{ box.grossWeight }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+
+            </div>
+            <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
+              <tbody class="w-[100%]">
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary  dark:bg-gray-800">
+                    PO Number
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.ponumber }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800  ">
+                    GR Number
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.grnumber }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800  ">
+                    Powder Number
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.productcode }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                    Date
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ formattedDate }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800 ">
+                    Employee ID
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white dark:text-white ">
+                    {{ viewData.resourcecode }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary  dark:bg-gray-800">
+                    Main Location
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.location }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:bg-gray-800">
+                    Sub Location
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.selectedSubLocation || 'No Sub Location Available' }}
+                  </td>
+                </tr>
+
+
+              </tbody>
+            </table>
+            <table class="w-[100%] text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
+              <tbody class="w-[100%]">
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary  dark:bg-gray-800">
+                    Vendor Name
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.vendorname }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary  dark:bg-gray-800">
+                    Vendor Code
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.vendorcode }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary  dark:bg-gray-800">
+                    Lot Number
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.lotnumber }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary  dark:bg-gray-800">
+                    Weight
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.nett }}
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary  dark:bg-gray-800">
+                    UOM
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white">
+                    {{ viewData.uom }}
+                  </td>
+                </tr>
+
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:bg-gray-800">
+                    Uploaded File
+                  </th>
+                  <td class="w-[50%] px-auto text-center text-gray-700 dark:text-white" v-if="viewData.fileName">
+                    <div class="flex justify-center items-center"> <!-- Flex container to center the button -->
+                      <button @click.prevent="viewdownloadFile"
+                        class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md shadow-md flex items-center">
+                        <span>Download File</span>
+                        <Lucide icon="Download" class="w-5 h-5 ml-2" :stroke-width="2" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+
+
+                <!-- <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                    Warehouse
+                  </th>
+                  <td class="w-[50%] px-auto text-center ">
+                    <span :class="{ 'text-red-600 ': !viewData.whrequired, 'text-green-600': viewData.whrequired }">
+                      {{ viewData.whrequired ? 'Required' : 'Not Required' }}
+                      <i v-if="viewData.whrequired" class="far fa-circle-check"></i>
+                      <i v-if="!viewData.whrequired" class="fa-regular fa-circle-xmark"></i>
+                    </span>
+                  </td>
+                </tr> -->
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="row"
+                    class="w-[50%] px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                    Job Status
+                  </th>
+                  <td class="w-[50%] px-auto text-center">
+                    <span :class="{
+                      'text-green-600 dark:text-green-500': viewData.status === 'Completed',
+                      'text-yellow-600 dark:text-yellow-500': viewData.status === 'Pending',
+                      'text-red-600 dark:text-red-500': viewData.status === 'QC Rejected',
+                      'text-orange-600 dark:text-orange-500': viewData.status === 'Draft',
+                      'text-gray-600': !viewData.status || viewData.status === ''
+                    }">
+                      {{ viewData.status || 'N/A' }}
+                    </span>
+                  </td>
+                </tr>
+
+              </tbody>
+            </table>
+
+          </div>
+
+          <div class="relative overflow-x-auto shadow-md sm:rounded-lg mt-10" v-if="viewData.listBoxesList.length > 0">
+            <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
+              <tbody class="w-[100%]">
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th scope="col" colspan="3"
+                    class="title px-6 py-4 text-center font-medium text-white whitespace-nowrap bg-blue-900 dark:text-white dark:bg-gray-800">
+                    Box Details
+                  </th>
+                </tr>
+                <tr>
+                  <th scope="row"
+                    class="title text-center px-4 py-4 font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                    Sub Lot Number
+                  </th>
+                  <th scope="row"
+                    class="title text-center px-4 py-4 font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                    Nett Weight
+                  </th>
+                  <th scope="row"
+                    class="title px-4 py-2 text-center font-medium text-white whitespace-nowrap bg-primary dark:text-white dark:bg-gray-800">
+                    Gross Weight
+                  </th>
+                </tr>
+                <tr v-for="(box, index) in viewData.listBoxesList" :key="index"
+                  class="hover:bg-gray-100 dark:hover:bg-gray-100">
+                  <td class="title py-3 px-3 text-gray-700 dark:text-white text-center">
+                    {{ box.subLotNumber }}
+                  </td>
+                  <td class="title py-3 px-3 text-gray-700 dark:text-white text-center">
+                    {{ box.nettWeight }}
+                  </td>
+                  <td class="title py-3 px-3 text-gray-700 dark:text-white text-center">
+                    {{ box.grossWeight }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+
+      </Dialog.Description>
+      <Dialog.Footer>
+        <Button type="button" variant="primary" class="mr-2" @click="printTable">
+          <i class="fa-solid fa-print mr-2"></i> Print
+        </Button>
+
+        <Button type="button" variant="outline-secondary" @click="() => {
+          setviewModal(false);
+        }
+          " class="w-20 mr-1">
+          Close
+        </Button>
+      </Dialog.Footer>
+    </Dialog.Panel>
+  </Dialog>
+  <!-- END: Modal Content -->
 </template>
+<style scoped>
+/* Styles specifically for the printable area */
+#printJS-page table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+#printJS-page th,
+#printJS-page td {
+  border: 1px solid #000;
+  padding: 4px 2px;
+  /* Reduced horizontal padding */
+  text-align: center;
+  /* Center align text horizontally */
+  vertical-align: middle;
+  /* Center align text vertically */
+}
+
+#printJS-page th {
+  background-color: #f2f2f2;
+  font-weight: bold;
+  color: #000;
+}
+
+#printJS-page td {
+  color: #000;
+}
+
+#printJS-page .title {
+  text-align: center;
+}
+
+/* Status colors */
+#printJS-page .text-green-600 {
+  color: #166534;
+}
+
+#printJS-page .text-cyan-600 {
+  color: #155e75;
+}
+
+#printJS-page .text-red-600 {
+  color: #991b1b;
+}
+
+#printJS-page .text-orange-600 {
+  color: #9a3412;
+}
+</style>

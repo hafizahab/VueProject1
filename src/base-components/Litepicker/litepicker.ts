@@ -7,18 +7,12 @@ import {
 } from "./Litepicker.vue";
 
 interface Picker extends Litepicker {
-  on?: (
-    event: string,
-    cb: (
-      startDate: {
-        dateInstance: Date;
-      },
-      endDate: {
-        dateInstance: Date;
-      }
-    ) => void
-  ) => {};
+  on: <K extends string | symbol>(
+    eventName: K,
+    listener: (...args: any[]) => void
+  ) => this;
 }
+
 
 const getDateFormat = (format: string | undefined) => {
   return format !== undefined ? format : "D MMM, YYYY";

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from "vue-router";
 import { twMerge } from "tailwind-merge";
-import logoUrl from "../../assets/images/logo.svg";
+import logoUrl from "../../assets/images/logo.png";
 import Lucide from "../../base-components/Lucide";
 import { useSideMenuStore } from "../../stores/side-menu";
 import { FormattedMenu, nestedMenu } from "../../layouts/SideMenu/side-menu";
@@ -52,11 +52,11 @@ onMounted(() => {
   >
     <div class="h-[70px] px-3 sm:px-8 flex items-center">
       <a href="" class="flex mr-auto">
-        <h1 
-    class="w-6 font-bold text-white lg:hidden 2xl:block"
->
-    Porex Digital
-</h1>
+        <img
+          alt="Enigma Tailwind HTML Admin Template"
+          class="w-6"
+          :src="logoUrl"
+        />
       </a>
       <a href="#" @click="(e) => e.preventDefault()">
         <Lucide

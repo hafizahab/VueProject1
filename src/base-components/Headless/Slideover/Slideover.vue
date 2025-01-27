@@ -3,7 +3,7 @@ export default {
   inheritAttrs: false,
 };
 
-type Size = "sm" | "md" | "lg" | "xl";
+type Size = "sm" | "md" | "lg" | "xl" | "3xl";
 </script>
 
 <script setup lang="ts">
@@ -28,7 +28,7 @@ interface SlideoverProps
 const props = withDefaults(defineProps<SlideoverProps>(), {
   as: "div",
   open: false,
-  size: "md",
+  size: "xl",
 });
 
 const { as, onClose, staticBackdrop, size } = props;

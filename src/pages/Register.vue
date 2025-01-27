@@ -4,7 +4,6 @@ import MainColorSwitcher from "../components/MainColorSwitcher";
 import logoUrl from "../assets/images/logo.svg";
 import illustrationUrl from "../assets/images/illustration.svg";
 import { FormInput, FormCheck } from "../base-components/Form";
-import Button from "../base-components/Button";
 </script>
 
 <template>
