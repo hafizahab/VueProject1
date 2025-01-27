@@ -10,7 +10,6 @@ import axios from "axios";
 import TomSelect from "../base-components/TomSelect";
 import LoadingIcon from "../base-components/LoadingIcon";
 
-const select = ref("1");
 
 const selectedPlatforms = ref([]);
 const selectOptions = {
@@ -634,7 +633,7 @@ const editFormData = reactive({
   secondaryProcess: false,
   weightperpiece: '',
   productType: 'Product',
-  cartonType: select.value,
+  cartonType: '',
   timeTakenforBlending: '',
   timeTakenperKgforBlending: '',
   timeTakenforMachineStation: '',
@@ -744,7 +743,7 @@ const addFormData = reactive({
   productType: 'Product',
   timeTakenforBlending: '',
   timeTakenperKgforBlending: '',
-  cartonType: select.value,
+  cartonType: '',
   timeTakenforMachineStation: '',
   timeTakenperKgforMachineStation: '',
   timeTakenforChemicalTreatment: '',
@@ -894,6 +893,61 @@ const handlePlasmaTreatmentChange = () => {
 
 
 
+// Add Carton Type dropdown state
+const isCartonTypeDropdownOpen = ref(false);
+const searchCartonTypeQuery = ref('');
+const selectedCartonType = ref(addFormData.cartonType);
+
+// Computed property to filter carton types based on search query
+const filteredCartonTypes = computed(() => {
+  if (!searchCartonTypeQuery.value) {
+    return addFormData.cartonTypes;
+  }
+  return addFormData.cartonTypes.filter((cartonType) =>
+    cartonType.toLowerCase().includes(searchCartonTypeQuery.value.toLowerCase())
+  );
+});
+
+// Function to toggle dropdown open/close for Add Carton Type
+const toggleCartonTypeDropdown = () => {
+  isCartonTypeDropdownOpen.value = !isCartonTypeDropdownOpen.value;
+  searchCartonTypeQuery.value = ''; // Clear search query when dropdown is opened
+};
+
+// Function to select a Carton Type
+const selectCartonType = (cartonType : string) => {
+  selectedCartonType.value = cartonType;
+  addFormData.cartonType = cartonType;
+  isCartonTypeDropdownOpen.value = false; // Close the dropdown after selecting
+};
+
+// Edit Carton Type dropdown state
+const isEditCartonTypeDropdownOpen = ref(false);
+const searchEditCartonTypeQuery = ref('');
+const selectedEditCartonType = ref(editFormData.cartonType);
+
+// Computed property to filter carton types based on search query (for edit context)
+const filteredEditCartonTypes = computed(() => {
+  if (!searchEditCartonTypeQuery.value) {
+    return editFormData.cartonTypes;
+  }
+  return editFormData.cartonTypes.filter((cartonType) =>
+    cartonType.toLowerCase().includes(searchEditCartonTypeQuery.value.toLowerCase())
+  );
+});
+
+// Function to toggle dropdown open/close for Edit Carton Type
+const toggleEditCartonTypeDropdown = () => {
+  isEditCartonTypeDropdownOpen.value = !isEditCartonTypeDropdownOpen.value;
+  searchEditCartonTypeQuery.value = ''; // Clear search query when dropdown is opened
+};
+
+// Function to select a Carton Type (for edit context)
+const selectEditCartonType = (cartonType : string) => {
+  selectedEditCartonType.value = cartonType;
+  editFormData.cartonType = cartonType;
+  isEditCartonTypeDropdownOpen.value = false; // Close the dropdown after selecting
+};
 
 
 
@@ -1667,40 +1721,40 @@ const addRole = () => {
 
   // Validate and format the payload
   const formData = validatePayload({
-    code: addFormData.code,
-    remarks: addFormData.remarks || "Default Remarks",
-    status: addFormData.status,
-    containsRecipe: addFormData.containsRecipe,
-    wettreatmentrequired: addFormData.wettreatmentrequired,
-    plasmatreatmentrequired: addFormData.plasmatreatmentrequired,
-    dustingrequired: addFormData.dustingrequired,
-    deburringrequired: addFormData.deburringrequired,
-    qualitycheckrequired: addFormData.qualitycheckrequired,
-    weightperpiece: parseFloat(addFormData.weightperpiece) || 0,
-    productType: addFormData.productType,
-    platform: addFormData.platform.join(','), // Convert array to comma-separated string
-    timeTakenforBlending: "0",
-    timeTakenforMachineStation: "0",
-    timeTakenforChemicalTreatment: "0",
-    timeTakenforBlow: "0",
-    timeTakenforQCI: "0",
-    secondaryProcess: addFormData.secondaryProcess,
-    cartonType: addFormData.cartonType || "Default Carton Type", // Provide a default value
-    timeTakenperKgforBlending: "0",
-    timeTakenperKgforMachineStation: "0",
-    timeTakenperKgforChemicalTreatment: "0",
-    timeTakenperKgforBlow: "0",
-    timeTakenperKgforQCI: "0",
-    discrepencyWeight: 0,
-    productRecipe: addFormData.containsRecipe
-      ? addFormData.productRecipe.map(recipe => ({
-          id: recipe.id || generateUUID(), // Generate a new UUID if not provided
-          productId: addFormData.id || null,
-          code: recipe.code,
-          percentage: parseFloat(recipe.percentage).toFixed(4), // Ensure 4 decimal places
-        }))
-      : [],
-  });
+  code: addFormData.code,
+  remarks: addFormData.remarks || "Default Remarks",
+  status: addFormData.status,
+  containsRecipe: addFormData.containsRecipe,
+  wettreatmentrequired: addFormData.wettreatmentrequired,
+  plasmatreatmentrequired: addFormData.plasmatreatmentrequired,
+  dustingrequired: addFormData.dustingrequired,
+  deburringrequired: addFormData.deburringrequired,
+  qualitycheckrequired: addFormData.qualitycheckrequired,
+  weightperpiece: parseFloat(addFormData.weightperpiece) || 0,
+  productType: addFormData.productType,
+  platform: addFormData.platform.join(','), // Convert array to comma-separated string
+  timeTakenforBlending: addFormData.timeTakenforBlending || "0",
+  timeTakenforMachineStation: addFormData.timeTakenforMachineStation || "0",
+  timeTakenforChemicalTreatment: addFormData.timeTakenforChemicalTreatment || "0",
+  timeTakenforBlow: addFormData.timeTakenforBlow || "0",
+  timeTakenforQCI:  "0",
+  secondaryProcess: addFormData.secondaryProcess,
+  cartonType: addFormData.cartonType || "Default Carton Type", // Provide a default value
+  timeTakenperKgforBlending: addFormData.timeTakenperKgforBlending || "0",
+  timeTakenperKgforMachineStation: addFormData.timeTakenperKgforMachineStation || "0",
+  timeTakenperKgforChemicalTreatment: addFormData.timeTakenperKgforChemicalTreatment || "0",
+  timeTakenperKgforBlow: addFormData.timeTakenperKgforBlow || "0",
+  timeTakenperKgforQCI: "0",
+  type: "Default Type", // New field `type`
+  discrepencyWeight: addFormData.discrepencyWeight || 0,
+  productRecipe: addFormData.containsRecipe
+    ? addFormData.productRecipe.map(recipe => ({
+        code: recipe.code,
+        percentage: parseFloat(recipe.percentage) || 0,
+      }))
+    : [],
+});
+
 
   console.log('Payload before submission:', formData);
 
@@ -1848,7 +1902,7 @@ const resetFormData = (formData: any) => {
   addFormData.hoursForBlow = 0;
   addFormData.minutesForBlow = 0;
   addFormData.secondsForBlow = 0;
-  addFormData.cartonType = select.value
+  addFormData.cartonType = ''
   addFormData.productRecipe = [];
   addFormData.discrepencyWeight = 0;
 };
@@ -1877,7 +1931,7 @@ const handleAddClick = (event: MouseEvent) => {
 
 const resetEditFormData = () => {
   editFormData.platform = [];
-  editFormData.cartonType = select.value;
+  editFormData.cartonType = '';
 };
 
 // Watch to synchronize timeTakenforBlending with formatted time values
@@ -2174,18 +2228,41 @@ function formatNumber(value: any) {
               </option>
             </FormSelect>
           </div> -->
-          <div class="mt-5">
-            <FormLabel htmlFor="regular-form-5">Carton Type</FormLabel>
-            <TomSelect v-model="addFormData.cartonType" :options="{
-              placeholder: 'Select a Carton Type Option',
-            }" class="w-full">
-              <option disabled value="1">Select a Carton Type Option</option>
-              <option v-for="cartonType in addFormData.cartonTypes" :key="cartonType" :value="cartonType">
-                {{ cartonType }}
-              </option>
-            </TomSelect>
+          <div class="mt-5 relative">
+  <FormLabel htmlFor="regular-form-5">Carton Type</FormLabel>
+  <span class="text-red-500 pl-1 text-md">*</span>
 
-          </div>
+  <!-- Custom dropdown with search -->
+  <div class="relative">
+    <div
+      :class="['border rounded', { 'border-red-500': formSubmitted && !addFormData.cartonType, 'border-gray-300': !(formSubmitted && !addFormData.cartonType) }]">
+      <div class="relative">
+        <!-- Dropdown trigger - clicking this opens the dropdown -->
+        <div @click="toggleCartonTypeDropdown" class="cursor-pointer p-2">
+          {{ selectedCartonType || 'Select a Carton Type Option' }}
+        </div>
+        <div v-if="isCartonTypeDropdownOpen" class="absolute left-0 top-full w-full bg-white shadow-md z-10">
+          <!-- Searchable input inside the dropdown -->
+          <input type="text" v-model="searchCartonTypeQuery" placeholder="Search Carton Type"
+            class="border-b border-gray-300 p-2 w-full" />
+          <!-- Filtered options -->
+          <ul class="max-h-40 overflow-y-auto">
+            <li v-for="cartonType in filteredCartonTypes" :key="cartonType"
+              @click="selectCartonType(cartonType)" class="cursor-pointer p-2 hover:bg-gray-100">
+              {{ cartonType }}
+            </li>
+            <li v-if="filteredCartonTypes.length === 0" class="p-2 text-gray-500">No results found</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <span v-if="formSubmitted && !addFormData.cartonType" class="text-red-500">
+    Carton Type is required!
+  </span>
+</div>
+
           <div class="relative overflow-x-auto shadow-md sm:rounded-lg mt-10"
             v-if="addFormData.productType === 'Product'">
             <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">

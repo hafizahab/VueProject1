@@ -772,6 +772,7 @@ const editFormData = reactive({
     waste: 0,
   },
   subJobDetails: [] as Array<{
+    id: '';
     jobId: string;
     subJobId: string;
     machineId: string;
@@ -817,6 +818,11 @@ const editFormData = reactive({
     isRecieved: boolean;
   }>
 });
+
+// Helper method to calculate total
+function calculateTotal(recipes: any[], field: string): number {
+  return recipes.reduce((sum, recipe) => sum + recipe[field], 0);
+}
 
 // Dropdown control for each Powder Code in whpowderList
 const isPowderCodeDropdownOpen: Ref<boolean[]> = ref([]); // Explicitly define as boolean[]
@@ -2730,105 +2736,96 @@ const printTable = (): void => {
 
           <!-- Sub Job Details -->
           <div class="mt-5 border py-5 px-3 rounded-lg overflow-hidden">
-            <h6 class="mb-2 text-lg font-medium leading-none">Sub Job Details</h6>
-            <hr>
-            <div v-for="(subJobDetail, subJobIndex) in editFormData.subJobDetails" :key="subJobIndex">
-              <div>
-                <div class="lg:flex lg:space-x-5 lg:w-full">
-                  <div class="mt-5 lg:flex-1">
-                    <FormLabel class="block mb-2">Sub Job ID</FormLabel>
-                    <FormInput v-model="subJobDetail.subJobId" type="text" disabled />
-                  </div>
+  <h6 class="mb-2 text-lg font-medium leading-none">Sub Job Details</h6>
+  <hr>
+  <div v-for="(subJobDetail, subJobIndex) in editFormData.subJobDetails" :key="subJobIndex">
+    <div>
+      <div class="lg:flex lg:space-x-5 lg:w-full">
+        <div class="mt-5 lg:flex-1">
+          <FormLabel class="block mb-2">Sub Job ID</FormLabel>
+          <FormInput v-model="subJobDetail.subJobId" type="text" disabled />
+        </div>
 
-                  <!-- Custom Machine ID Dropdown -->
-                  <!-- Custom Machine ID Dropdown -->
-                  <div class="mt-5 lg:flex-1">
-                    <FormLabel htmlFor="regular-form-5">Machine ID</FormLabel>
-                    <div class="relative">
-                      <!-- Only trigger click if not disabled -->
-                      <div @click="!isDisabled(subJobDetail) && toggleMachineIdDropdown(subJobIndex)"
-                        :class="['cursor-pointer p-2 border rounded', { 'cursor-not-allowed opacity-50': isDisabled(subJobDetail) }]"
-                        :disabled="isDisabled(subJobDetail)">
-                        {{ subJobDetail.machineId || 'Select a Machine ID ' }}
-                      </div>
+        <div class="mt-5 lg:flex-1">
+          <FormLabel htmlFor="regular-form-5">Machine ID</FormLabel>
+          <div class="relative">
+            <div @click="!isDisabled(subJobDetail) && toggleMachineIdDropdown(subJobIndex)"
+              :class="['cursor-pointer p-2 border rounded', { 'cursor-not-allowed opacity-50': isDisabled(subJobDetail) }]">
+              {{ subJobDetail.machineId || 'Select a Machine ID ' }}
+            </div>
 
-                      <div v-if="isMachineIdDropdownOpen[subJobIndex]"
-                        class="absolute left-0 top-full w-full bg-white shadow-md z-10">
-                        <!-- Searchable input inside the dropdown -->
-                        <input type="text" v-model="searchMachineIdQuery[subJobIndex]" placeholder="Search Machine ID"
-                          class="border-b border-gray-300 p-2 w-full" />
-                        <!-- Filtered options -->
-                        <ul class="max-h-40 overflow-y-auto">
-                          <li v-for="machineId in filteredMachineIds(subJobIndex)" :key="machineId"
-                            @click="selectMachineId(subJobIndex, machineId)"
-                            class="cursor-pointer p-2 hover:bg-gray-100">
-                            {{ machineId }}
-                          </li>
-                          <li v-if="filteredMachineIds(subJobIndex).length === 0" class="p-2 text-gray-500">No results
-                            found</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-
-
-                  <div class="mt-5 lg:flex-1">
-                    <FormLabel htmlFor="regular-form-1">Status</FormLabel>
-                    <FormSelect v-model="subJobDetail.status" class="sm:mr-2" aria-label="Default select example"
-                      disabled>
-                      <option disabled value="">Select a Job Status Option</option>
-                      <option>Completed</option>
-                      <option>Submitted</option>
-                      <option>Success</option>
-                      <option>Pending</option>
-                    </FormSelect>
-                  </div>
-
-                  <div class="mt-5 lg:flex-1">
-                    <!-- Submit Button for Sub Job Details -->
-                    <Button type="button" @click="submitJobDetails(subJobDetail)" variant="primary"
-                      class="w-[100%] mr-2 lg:mt-6 shadow-md"
-                      :disabled="subJobDetail.status === 'Submitted' || subJobDetail.status === 'Completed' || !subJobDetail.machineId">
-                      Submit
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Recipe Table -->
-              <h6 class="mb-2 mt-8 text-lg font-medium leading-none">Recipes</h6>
-              <hr>
-              <div v-if="subJobDetail.recipe.length > 0">
-                <table class="mt-5 min-w-full border-collapse rounded-lg overflow-hidden shadow-sm">
-                  <thead class="bg-primary text-white">
-                    <tr>
-                      <th class="py-2 px-4 border-b text-center">No.</th>
-                      <th class="py-2 px-4 border-b text-center">Part Number</th>
-                      <th class="py-2 px-4 border-b text-center">Percentage</th>
-                      <th class="py-2 px-4 border-b text-center">Weight</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(recipe, index) in subJobDetail.recipe" :key="index">
-                      <td class="py-2 px-4 border-b text-center small-width ">
-                        {{ index + 1 }}
-                      </td>
-                      <td class="py-2 px-4 border-b text-center">
-                        {{ recipe.productCode }}
-                      </td>
-                      <td class="py-2 px-4 border-b text-center">
-                        {{ recipe.percentage }}
-                      </td>
-                      <td class="py-2 px-4 border-b text-center">
-                        {{ recipe.weight }}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <hr class="mt-10 border-t-2 border-gray">
+            <div v-if="isMachineIdDropdownOpen[subJobIndex]" class="absolute left-0 top-full w-full bg-white shadow-md z-10">
+              <input type="text" v-model="searchMachineIdQuery[subJobIndex]" placeholder="Search Machine ID"
+                class="border-b border-gray-300 p-2 w-full" />
+              <ul class="max-h-40 overflow-y-auto">
+                <li v-for="machineId in filteredMachineIds(subJobIndex)" :key="machineId"
+                  @click="selectMachineId(subJobIndex, machineId)" class="cursor-pointer p-2 hover:bg-gray-100">
+                  {{ machineId }}
+                </li>
+                <li v-if="filteredMachineIds(subJobIndex).length === 0" class="p-2 text-gray-500">No results found</li>
+              </ul>
             </div>
           </div>
+        </div>
+
+        <div class="mt-5 lg:flex-1">
+          <FormLabel htmlFor="regular-form-1">Status</FormLabel>
+          <FormSelect v-model="subJobDetail.status" class="sm:mr-2" aria-label="Default select example" disabled>
+            <option disabled value="">Select a Job Status Option</option>
+            <option>Completed</option>
+            <option>Submitted</option>
+            <option>Success</option>
+            <option>Pending</option>
+          </FormSelect>
+        </div>
+
+        <div class="mt-5 lg:flex-1">
+          <Button type="button" @click="submitJobDetails(subJobDetail)" variant="primary" class="w-[100%] mr-2 lg:mt-6 shadow-md"
+            :disabled="subJobDetail.status === 'Submitted' || subJobDetail.status === 'Completed' || !subJobDetail.machineId">
+            Submit
+          </Button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recipe Table -->
+    <h6 class="mb-2 mt-8 text-lg font-medium leading-none">Recipes</h6>
+    <hr />
+    <div class="mb-8 mt-5">
+      <table class="min-w-full border-collapse rounded-lg overflow-hidden shadow-sm">
+        <thead class="bg-primary text-white">
+          <tr>
+            <th class="py-2 px-4 border-b text-center">No.</th>
+            <th class="py-2 px-4 border-b text-center">Part Number</th>
+            <th class="py-2 px-4 border-b text-center">Percentage</th>
+            <th class="py-2 px-4 border-b text-center">Weight</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- List recipes -->
+          <tr v-for="(recipe, recipeIndex) in subJobDetail.recipe" :key="recipeIndex">
+            <td class="py-2 px-4 border-b text-center">{{ recipeIndex + 1 }}</td>
+            <td class="py-2 px-4 border-b text-center">{{ recipe.productCode }}</td>
+            <td class="py-2 px-4 border-b text-center">{{ recipe.percentage }}</td>
+            <td class="py-2 px-4 border-b text-center">{{ recipe.weight }}</td>
+          </tr>
+          <!-- Total row -->
+          <tr class="bg-emerald-800 text-white">
+            <td colspan="2" class="py-2 px-4 border-t text-center font-semibold">Total</td>
+            <td class="py-2 px-4 border-t text-center font-semibold">
+              {{ calculateTotal(subJobDetail.recipe, 'percentage') }}
+            </td>
+            <td class="py-2 px-4 border-t text-center font-semibold">
+              {{ calculateTotal(subJobDetail.recipe, 'weight') }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <hr class="mt-10 border-t-2 border-gray">
+  </div>
+</div>
+
 
 
           <!-- WH Powder List Section -->
@@ -3275,6 +3272,16 @@ const printTable = (): void => {
               <td class="py-2 px-4 border-b text-center">{{ recipe.percentage }}</td>
               <td class="py-2 px-4 border-b text-center">{{ recipe.weight }}</td>
             </tr>
+            <!-- Total row -->
+          <tr class="bg-emerald-800 text-white">
+            <td colspan="2" class="py-2 px-4 border-t text-center font-semibold">Total</td>
+            <td class="py-2 px-4 border-t text-center font-semibold">
+              {{ calculateTotal(subJobDetail.recipe, 'percentage') }}
+            </td>
+            <td class="py-2 px-4 border-t text-center font-semibold">
+              {{ calculateTotal(subJobDetail.recipe, 'weight') }}
+            </td>
+          </tr>
           </tbody>
         </table>
       </div>
