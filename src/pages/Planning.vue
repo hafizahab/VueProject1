@@ -400,16 +400,7 @@ const initTabulator = () => {
                       // Ensure product sub-codes are fetched before proceeding
                       await fetchProductSubCodes(item.productcode);
 
-                      // Ensure the sub-codes data is loaded
-                      if (!editFormData.productSubCodesofRecipe || editFormData.productSubCodesofRecipe.length === 0) {
-                        console.error("Product sub-codes data not loaded.");
-                        Swal.fire({
-                          icon: 'error',
-                          title: 'Error',
-                          text: 'Product sub-codes data not loaded. Please try again.',
-                        });
-                        return;
-                      }
+
 
                       // Update weights if quantity is available
                       if (item.quantity) {
@@ -417,7 +408,12 @@ const initTabulator = () => {
                       }
 
                       // Prepare the release payload
-                      const platformString: string = Array.isArray(item.platform) ? item.platform.join(',') : '';
+                      let platformString = '';
+              if (Array.isArray(item.platform)) {
+                platformString = item.platform.join(',');
+              } else if (typeof item.platform === 'string') {
+                platformString = item.platform;
+              }
                       const releasePayload: any = {
                         productcode: item.productcode,
                         date: item.date || new Date().toISOString().substring(0, 10),
@@ -1102,7 +1098,6 @@ onMounted(() => {
 
 // Fetch job IDs on component mount
 onMounted(async () => {
-  await fetchExistingJobIds();
   generateNewJobId();
 });
 
@@ -1902,40 +1897,18 @@ const deleteRowFromListBinsMachine = (machineIndex: number, binIndex: number) =>
 };
 
 
-
-// State to hold existing job IDs
-const existingJobIds = ref<string[]>([]);
-
-// Function to fetch existing job IDs
-import { debounce } from 'lodash';
-
-const fetchExistingJobIds = debounce(async () => {
+// Automatically generate a new unique job ID
+const generateNewJobId = async () => {
   try {
-    const response = await axios.get('http://10.87.0.33:8082/api/PlanningDetails');
-    if (response.status === 200 && response.data.result) {
-      existingJobIds.value = Array.isArray(response.data.result)
-        ? response.data.result.map((job: any) => job.jobId)
-        : [];
+    const response = await axios.get('http://10.87.0.33:8082/api/PlanningDetails/GetJobId');
+    if (response.status === 200 && response.data) {
+      addFormData.jobId = response.data;  // Assuming the API returns the job ID as a plain string (e.g., 'J693')
+    } else {
+      console.error('Unexpected response format:', response);
     }
   } catch (error) {
-    console.error('Error fetching job IDs:', error);
+    console.error('Error fetching new job ID:', error);
   }
-}, 300); // Debounce by 300ms
-
-
-// Automatically generate a new unique job ID
-const generateNewJobId = () => {
-  const prefix = 'J';
-  let newJobId = '';
-  let num = 1;
-
-  // Ensure the new job ID is unique
-  do {
-    newJobId = `${prefix}${num.toString().padStart(3, '0')}`;
-    num++;
-  } while (existingJobIds.value.includes(newJobId));
-
-  addFormData.jobId = newJobId;
 };
 
 const fetchNamesShift = () => {
@@ -2604,7 +2577,6 @@ const updateTableData = () => {
     fetchProductCodes(),
     fetchUserDetails(),
     fetchProductList(),
-    fetchExistingJobIds(),
   generateNewJobId(),
     fetchType()
   ];
@@ -3088,7 +3060,6 @@ const saveRole = async () => {
               updateTableData();
               setAddSlideover(false);
  // Update `existingJobIds` after successful save and submit
- await fetchExistingJobIds();
               Swal.fire({
                 icon: 'success',
                 title: 'Data Saved and Submitted Successfully',
@@ -3378,7 +3349,6 @@ const setAddSlideover = async (value: boolean) => {
   if (value) {
     try {
       // Fetch existing job IDs first, then generate a new Job ID
-      await fetchExistingJobIds();
       generateNewJobId();
     } catch (error) {
       console.error('Error fetching existing job IDs or generating a new Job ID:', error);
@@ -3411,7 +3381,6 @@ const setAddSlideover = async (value: boolean) => {
     fetchUserDetails();
     fetchProductList();
     fetchType();
-    fetchExistingJobIds();
   }
 };
 
@@ -3422,15 +3391,50 @@ const setEditSlideOver = (value: boolean) => {
   EditSlideOver.value = value;
   if (!value) {
     resetEditFormData();
-    fetchExistingJobIds();
     generateNewJobId();
   }
 };
 
-const handleAddClick = (event: MouseEvent) => {
+const handleAddClick = async (event: MouseEvent) => {
   event.preventDefault();
-  setAddSlideover(true);
+  loading.value = true; // Start loading animation
+
+  try {
+    // Perform the API call to save temporary Job ID
+    const response = await axios.get('http://10.87.0.33:8082/api/PlanningDetails/SavetempJobId');
+
+    // Check the API response for success or error
+    if (response.status === 200 && response.data) {
+      console.log('Temporary Job ID saved successfully:', response.data);
+
+      // Open the Add Slideover after successful API call
+      setAddSlideover(true);
+    } else {
+      console.error('Failed to save temporary Job ID:', response.data);
+      Swal.fire({
+        icon: 'error',
+        title: 'Failed to Save Temporary Job ID',
+        text: 'Please try again later.',
+        confirmButtonColor: '#d33',
+      });
+    }
+
+    // You can add any function here to fetch updated details if needed
+    generateNewJobId(); // Uncomment or modify as required
+
+  } catch (error) {
+    console.error('Error during API call to save temporary Job ID:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: 'An error occurred while saving temporary Job ID. Please try again.',
+      confirmButtonColor: '#d33',
+    });
+  } finally {
+    loading.value = false; // End loading animation
+  }
 };
+
 
 
 const resetEditFormData = () => {

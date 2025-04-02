@@ -3195,16 +3195,38 @@ const handleAddClick = async (event: MouseEvent) => {
   loading.value = true; // Start loading animation
 
   try {
-    // Perform any necessary setup or data fetching here
+    // Perform the API call to save temporary GR No
+    const response = await axios.get('http://10.87.0.33:8082/api/GRDetails/SavetempGRNo');
 
-    // Open the Add Slideover once data is ready
-    setAddSlideover(true);
+    // Check the API response for success or error
+    if (response.status === 200 && response.data) {
+      console.log('Temporary GR No saved successfully:', response.data);
+
+      // Open the Add Slideover after successful API call
+      setAddSlideover(true);
+    } else {
+      console.error('Failed to save temporary GR No:', response.data);
+      Swal.fire({
+        icon: 'error',
+        title: 'Failed to Save Temporary GR No',
+        text: 'Please try again later.',
+        confirmButtonColor: '#d33',
+      });
+    }
+    fetchGRDetails();
   } catch (error) {
-    console.error('Error during add setup:', error);
+    console.error('Error during API call to save temporary GR No:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: 'An error occurred while saving temporary GR No. Please try again.',
+      confirmButtonColor: '#d33',
+    });
   } finally {
     loading.value = false; // End loading animation
   }
 };
+
 
 const toPrint = ref<HTMLElement | null>(null);
 

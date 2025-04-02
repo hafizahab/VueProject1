@@ -676,6 +676,7 @@ const editFormData = reactive({
       productId: '',
       code: '',
       percentage: '',
+      sequenceNo: 0,
     }
   ]
 });
@@ -713,6 +714,7 @@ const viewData = reactive({
       productId: '',
       productCode: 0,
       percentage: '',
+      sequenceNo: 0,
     }
   ]
 });
@@ -722,6 +724,7 @@ interface ProductRecipe {
   productId: string;
   code: string;
   percentage: string;
+  sequenceNo: number;
 }
 
 
@@ -1080,11 +1083,17 @@ const generateUUID = () => {
 };
 
 const addRow = (formData: any) => {
+  // Find the highest sequenceNo in the current list
+  const maxSequenceNo = formData.productRecipe.length > 0
+    ? Math.max(...formData.productRecipe.map((row : any) => row.sequenceNo || 0))
+    : 0;
+
   formData.productRecipe.push({
     id: generateUUID(),
     productId: formData.id,
     code: '',
     percentage: '',
+    sequenceNo: maxSequenceNo + 1, // Auto-increment sequenceNo
   });
 };
 
@@ -1097,6 +1106,7 @@ const addRowToAddForm = () => {
 const addRowToEditForm = () => {
   addRow(editFormData);
 };
+
 
 const formSubmitted = ref(false);
 
@@ -1226,7 +1236,7 @@ const fetchAndSetData = (id: string, formData: any, modalSetter: (value: boolean
           dustingrequired: firstItem.dustingrequired,
           deburringrequired: firstItem.deburringrequired,
           qualitycheckrequired: firstItem.qualitycheckrequired,
-          weightperpiece: firstItem.weightperpiece,
+          weightperpiece: parseFloat(firstItem.weightperpiece),
           discrepencyWeight: firstItem.discrepencyWeight,
           productType: firstItem.productType,
           cartonType: firstItem.cartonType,
@@ -1272,7 +1282,9 @@ const fetchAndSetData = (id: string, formData: any, modalSetter: (value: boolean
           minutesForBlowKG: blowTimeKG.minutes,
           secondsForBlowKG: blowTimeKG.seconds,
         });
-
+// Ensure both the dropdown state and form data are updated
+selectedEditCartonType.value = firstItem.cartonType;
+        editFormData.cartonType = firstItem.cartonType;
         // Fetch product recipe data if viewing details
         if (isView) {
           axios.get(`${API_BASE_URL}GetProductReceiptdatabyProductCode/${firstItem.code}`)
@@ -1417,7 +1429,7 @@ const updateRole = () => {
     (editFormData.containsRecipe && editFormData.productRecipe.length === 0) ||
     (!editFormData.weightperpiece || // Check if weightperpiece is empty
       isNaN(parseFloat(editFormData.weightperpiece)) || // Check if it's not a number
-      editFormData.weightperpiece.toString().split('.')[1]?.length > 10)) { // Check if it has more than 4 decimal places
+      editFormData.weightperpiece.toString().split('.')[1]?.length > 8)) { // Check if it has more than 4 decimal places
 
     Swal.fire({
       icon: 'error',
@@ -1652,7 +1664,7 @@ const addRole = () => {
       (addFormData.containsRecipe && addFormData.productRecipe.length === 0) ||
       (addFormData.weightperpiece === '' || // Check if weightperpiece is empty
         isNaN(parseFloat(addFormData.weightperpiece)) || // Check if it's not a number
-        addFormData.weightperpiece.toString().split('.')[1]?.length > 10))) { // Check if it has more than 4 decimal places
+        addFormData.weightperpiece.toString().split('.')[1]?.length > 8))) { // Check if it has more than 8 decimal places
     Swal.fire({
       icon: 'error',
       title: 'Please complete the field',
@@ -1674,7 +1686,7 @@ const addRole = () => {
     return; // Stop further processing
   }
 
-  // Check total percentage and decimals only if the "Contains Recipe" checkbox is checked
+  // Check total percentage and decimals only if "Contains Recipe" checkbox is checked
   if (addFormData.containsRecipe) {
     const totalPercentage = addFormData.productRecipe.reduce((sum, row) => {
       const percentage = parseFloat(row.percentage);
@@ -1704,6 +1716,24 @@ const addRole = () => {
       });
       return; // Stop further processing
     }
+
+    // Validation for sequenceNo: It must be a whole number and greater than 0
+    const hasInvalidSequenceNo = addFormData.productRecipe.some(row => {
+      const sequenceNo = (row.sequenceNo, 10);
+      return isNaN(sequenceNo) || sequenceNo <= 0 || row.sequenceNo.toString().includes('.');
+    });
+
+    if (hasInvalidSequenceNo) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Invalid Sequence Number',
+        text: 'Sequence Number must be a solid number greater than 0!',
+        showConfirmButton: true,
+        confirmButtonColor: '#d33',
+        confirmButtonText: 'Fix Errors',
+      });
+      return; // Stop further processing
+    }
   }
 
   const existingUser = items.value.find(user => user.code === addFormData.code);
@@ -1721,40 +1751,40 @@ const addRole = () => {
 
   // Validate and format the payload
   const formData = validatePayload({
-  code: addFormData.code,
-  remarks: addFormData.remarks || "Default Remarks",
-  status: addFormData.status,
-  containsRecipe: addFormData.containsRecipe,
-  wettreatmentrequired: addFormData.wettreatmentrequired,
-  plasmatreatmentrequired: addFormData.plasmatreatmentrequired,
-  dustingrequired: addFormData.dustingrequired,
-  deburringrequired: addFormData.deburringrequired,
-  qualitycheckrequired: addFormData.qualitycheckrequired,
-  weightperpiece: parseFloat(addFormData.weightperpiece) || 0,
-  productType: addFormData.productType,
-  platform: addFormData.platform.join(','), // Convert array to comma-separated string
-  timeTakenforBlending: addFormData.timeTakenforBlending || "0",
-  timeTakenforMachineStation: addFormData.timeTakenforMachineStation || "0",
-  timeTakenforChemicalTreatment: addFormData.timeTakenforChemicalTreatment || "0",
-  timeTakenforBlow: addFormData.timeTakenforBlow || "0",
-  timeTakenforQCI:  "0",
-  secondaryProcess: addFormData.secondaryProcess,
-  cartonType: addFormData.cartonType || "Default Carton Type", // Provide a default value
-  timeTakenperKgforBlending: addFormData.timeTakenperKgforBlending || "0",
-  timeTakenperKgforMachineStation: addFormData.timeTakenperKgforMachineStation || "0",
-  timeTakenperKgforChemicalTreatment: addFormData.timeTakenperKgforChemicalTreatment || "0",
-  timeTakenperKgforBlow: addFormData.timeTakenperKgforBlow || "0",
-  timeTakenperKgforQCI: "0",
-  type: "Default Type", // New field `type`
-  discrepencyWeight: addFormData.discrepencyWeight || 0,
-  productRecipe: addFormData.containsRecipe
-    ? addFormData.productRecipe.map(recipe => ({
-        code: recipe.code,
-        percentage: parseFloat(recipe.percentage) || 0,
-      }))
-    : [],
-});
-
+    code: addFormData.code,
+    remarks: addFormData.remarks || "",
+    status: addFormData.status,
+    containsRecipe: addFormData.containsRecipe,
+    wettreatmentrequired: addFormData.wettreatmentrequired,
+    plasmatreatmentrequired: addFormData.plasmatreatmentrequired,
+    dustingrequired: addFormData.dustingrequired,
+    deburringrequired: addFormData.deburringrequired,
+    qualitycheckrequired: addFormData.qualitycheckrequired,
+    weightperpiece: parseFloat(addFormData.weightperpiece) || 0,
+    productType: addFormData.productType,
+    platform: addFormData.platform.join(','), // Convert array to comma-separated string
+    timeTakenforBlending: addFormData.timeTakenforBlending || "0",
+    timeTakenforMachineStation: addFormData.timeTakenforMachineStation || "0",
+    timeTakenforChemicalTreatment: addFormData.timeTakenforChemicalTreatment || "0",
+    timeTakenforBlow: addFormData.timeTakenforBlow || "0",
+    timeTakenforQCI: "0",
+    secondaryProcess: addFormData.secondaryProcess,
+    cartonType: addFormData.cartonType || "",
+    timeTakenperKgforBlending: addFormData.timeTakenperKgforBlending || "0",
+    timeTakenperKgforMachineStation: addFormData.timeTakenperKgforMachineStation || "0",
+    timeTakenperKgforChemicalTreatment: addFormData.timeTakenperKgforChemicalTreatment || "0",
+    timeTakenperKgforBlow: addFormData.timeTakenperKgforBlow || "0",
+    timeTakenperKgforQCI: "0",
+    type: "",
+    discrepencyWeight: addFormData.discrepencyWeight || 0,
+    productRecipe: addFormData.containsRecipe
+      ? addFormData.productRecipe.map(recipe => ({
+          code: recipe.code,
+          percentage: parseFloat(recipe.percentage) || 0,
+          sequenceNo: recipe.sequenceNo, // Ensure sequenceNo is a whole number
+        }))
+      : [],
+  });
 
   console.log('Payload before submission:', formData);
 
@@ -1812,6 +1842,7 @@ const addRole = () => {
     formSubmitted.value = false;
   });
 };
+
 
 
 
@@ -2421,7 +2452,7 @@ function formatNumber(value: any) {
                 'border-red-500': formSubmitted &&
                   (!addFormData.weightperpiece ||
                     (addFormData.weightperpiece && isNaN(parseFloat(addFormData.weightperpiece))) ||
-                    (addFormData.weightperpiece && addFormData.weightperpiece.toString().split('.')[1]?.length > 10))
+                    (addFormData.weightperpiece && addFormData.weightperpiece.toString().split('.')[1]?.length > 8))
               }" />
             <!-- Check if Weight Per Piece is empty -->
             <span v-if="formSubmitted && !addFormData.weightperpiece" class="text-red-500">
@@ -2436,9 +2467,9 @@ function formatNumber(value: any) {
 
             <!-- Check if decimal places are more than 4, only if input exists -->
             <span
-              v-if="formSubmitted && addFormData.weightperpiece && addFormData.weightperpiece.toString().split('.')[1]?.length > 10"
+              v-if="formSubmitted && addFormData.weightperpiece && addFormData.weightperpiece.toString().split('.')[1]?.length > 8"
               class="text-red-500">
-              Weight Per Piece must have at most 4 decimal places!
+              Weight Per Piece must have at most 8 decimal places!
             </span>
           </div>
 
@@ -2470,6 +2501,7 @@ function formatNumber(value: any) {
               <table class="min-w-full border-collapse">
                 <thead>
                   <tr>
+                    <th class="py-2 px-4 border-b text-left">No.</th>
                     <th class="py-2 px-4 border-b text-left">Code</th>
                     <th class="py-2 px-4 border-b text-left">Percentage</th>
                     <th class="py-2 px-4 border-b text-center">Actions</th>
@@ -2477,6 +2509,17 @@ function formatNumber(value: any) {
                 </thead>
                 <tbody>
                   <tr v-for="(row, index) in addFormData.productRecipe" :key="index" class="hover:bg-gray-100">
+                    <td class="py-2 px-4 border-b w-16">
+  <FormInput
+    :class="{ 'border-red-500': formSubmitted && (!row.sequenceNo || !isNumeric(row.sequenceNo) || row.sequenceNo <= 0 || row.sequenceNo.toString().includes('.')) }"
+    v-model="row.sequenceNo" type="number" class="w-full px-2 py-1 border rounded w-16" />
+  <span
+    v-if="formSubmitted && (!row.sequenceNo || !isNumeric(row.sequenceNo) || row.sequenceNo <= 0 || row.sequenceNo.toString().includes('.'))"
+    class="text-red-500">
+    {{ !row.sequenceNo ? 'Sequence Number is required!' : !isNumeric(row.sequenceNo) ? 'Sequence Number must be a valid number!' : 'Sequence Number must be a whole number greater than 0!' }}
+  </span>
+</td>
+
                     <td class="py-2 px-4 border-b">
           <!-- Custom searchable dropdown for the "Code" field -->
           <div class="relative">
@@ -2589,19 +2632,41 @@ function formatNumber(value: any) {
             </FormSelect>
           </div> -->
 
-          <div class="mt-5">
-            <FormLabel htmlFor="regular-form-5">Carton Type</FormLabel>
-            <TomSelect v-model="editFormData.cartonType" :options="{
-              placeholder: 'Select a Carton Type Option',
-            }" class="w-full">
-              <option disabled value="1">Select a Carton Type Option</option>
-              <option v-for="cartonType in editFormData.cartonTypes" :key="cartonType" :value="cartonType">
-                {{ cartonType }}
-              </option>
+          <div class="mt-5 relative">
+  <FormLabel htmlFor="regular-form-5">Carton Type</FormLabel>
+  <span class="text-red-500 pl-1 text-md">*</span>
 
-            </TomSelect>
+  <!-- Custom dropdown with search -->
+  <div class="relative">
+    <div
+      :class="['border rounded', { 'border-red-500': formSubmitted && !editFormData.cartonType, 'border-gray-300': !(formSubmitted && !editFormData.cartonType) }]">
+      <div class="relative">
+        <!-- Dropdown trigger - clicking this opens the dropdown -->
+        <div @click="toggleEditCartonTypeDropdown" class="cursor-pointer p-2">
+          {{ selectedEditCartonType || 'Select a Carton Type Option' }}
+        </div>
+        <div v-if="isEditCartonTypeDropdownOpen" class="absolute left-0 top-full w-full bg-white shadow-md z-10">
+          <!-- Searchable input inside the dropdown -->
+          <input type="text" v-model="searchEditCartonTypeQuery" placeholder="Search Carton Type"
+            class="border-b border-gray-300 p-2 w-full" />
+          <!-- Filtered options -->
+          <ul class="max-h-40 overflow-y-auto">
+            <li v-for="cartonType in filteredEditCartonTypes" :key="cartonType"
+              @click="selectEditCartonType(cartonType)" class="cursor-pointer p-2 hover:bg-gray-100">
+              {{ cartonType }}
+            </li>
+            <li v-if="filteredEditCartonTypes.length === 0" class="p-2 text-gray-500">No results found</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
 
-          </div>
+  <span v-if="formSubmitted && !editFormData.cartonType" class="text-red-500">
+    Carton Type is required!
+  </span>
+</div>
+
           <div class="relative overflow-x-auto shadow-md sm:rounded-lg mt-10"
             v-if="editFormData.productType === 'Product'">
             <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
@@ -2759,7 +2824,7 @@ function formatNumber(value: any) {
                 'border-red-500':
                   (!editFormData.weightperpiece || // Empty check
                     isNaN(parseFloat(editFormData.weightperpiece)) || // Check if not a number
-                    editFormData.weightperpiece.toString().split('.')[1]?.length > 10) // Check if decimal places > 10
+                    editFormData.weightperpiece.toString().split('.')[1]?.length > 8) // Check if decimal places > 8
               }" />
             <!-- Empty field validation -->
             <span v-if="!editFormData.weightperpiece" class="text-red-500">
@@ -2774,9 +2839,9 @@ function formatNumber(value: any) {
 
             <!-- Decimal places validation -->
             <span
-              v-if="editFormData.weightperpiece && editFormData.weightperpiece.toString().split('.')[1]?.length > 10"
+              v-if="editFormData.weightperpiece && editFormData.weightperpiece.toString().split('.')[1]?.length > 8"
               class="text-red-500">
-              Weight Per Piece must have at most 4 decimal places!
+              Weight Per Piece must have at most 8 decimal places!
             </span>
           </div>
 
@@ -2817,6 +2882,16 @@ function formatNumber(value: any) {
                 </thead>
                 <tbody>
                   <tr v-for="(row, index) in editFormData.productRecipe" :key="index" class="hover:bg-gray-100">
+                    <td class="py-2 px-4 border-b w-16">
+  <FormInput
+    :class="{ 'border-red-500': formSubmitted && (!row.sequenceNo || !isNumeric(row.sequenceNo) || row.sequenceNo <= 0 || row.sequenceNo.toString().includes('.')) }"
+    v-model="row.sequenceNo" type="number" class="w-full px-2 py-1 border rounded w-16" />
+  <span
+    v-if="formSubmitted && (!row.sequenceNo || !isNumeric(row.sequenceNo) || row.sequenceNo <= 0 || row.sequenceNo.toString().includes('.'))"
+    class="text-red-500">
+    {{ !row.sequenceNo ? 'Sequence Number is required!' : !isNumeric(row.sequenceNo) ? 'Sequence Number must be a valid number!' : 'Sequence Number must be a whole number greater than 0!' }}
+  </span>
+</td>
                     <td class="py-2 px-4 border-b">
             <!-- Custom searchable dropdown for editFormData -->
             <div class="relative">

@@ -669,6 +669,7 @@ const editFormData = reactive({
       productId: '',
       code: '',
       percentage: '',
+      sequenceNo: 0,
     }
   ]
 });
@@ -705,6 +706,7 @@ const viewData = reactive({
       productId: '',
       productCode: 0,
       percentage: '',
+      sequenceNo: 0,
     }
   ]
 });
@@ -714,6 +716,7 @@ interface ProductRecipe {
   productId: string;
   code: string;
   percentage: string;
+  sequenceNo: number;
 }
 
 
@@ -975,11 +978,17 @@ const generateUUID = () => {
 };
 
 const addRow = (formData: any) => {
+  // Find the highest sequenceNo in the current list
+  const maxSequenceNo = formData.productRecipe.length > 0
+    ? Math.max(...formData.productRecipe.map((row : any) => row.sequenceNo || 0))
+    : 0;
+
   formData.productRecipe.push({
     id: generateUUID(),
     productId: formData.id,
     code: '',
     percentage: '',
+    sequenceNo: maxSequenceNo + 1, // Auto-increment sequenceNo
   });
 };
 
@@ -1580,6 +1589,24 @@ const addRole = () => {
         confirmButtonText: 'Fix Errors',
       });
       return;
+    }
+
+     // Validation for sequenceNo: It must be a whole number and greater than 0
+     const hasInvalidSequenceNo = addFormData.productRecipe.some(row => {
+      const sequenceNo = (row.sequenceNo, 10);
+      return isNaN(sequenceNo) || sequenceNo <= 0 || row.sequenceNo.toString().includes('.');
+    });
+
+    if (hasInvalidSequenceNo) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Invalid Sequence Number',
+        text: 'Sequence Number must be a solid number greater than 0!',
+        showConfirmButton: true,
+        confirmButtonColor: '#d33',
+        confirmButtonText: 'Fix Errors',
+      });
+      return; // Stop further processing
     }
   }
 
@@ -2293,6 +2320,7 @@ function formatNumber(value: any) {
               <table class="min-w-full border-collapse">
                 <thead>
                   <tr>
+                    <th class="py-2 px-4 border-b text-left">No.</th>
                     <th class="py-2 px-4 border-b text-left">Code</th>
                     <th class="py-2 px-4 border-b text-left">Percentage</th>
                     <th class="py-2 px-4 border-b text-center">Actions</th>
@@ -2300,6 +2328,16 @@ function formatNumber(value: any) {
                 </thead>
                 <tbody>
                   <tr v-for="(row, index) in addFormData.productRecipe" :key="index" class="hover:bg-gray-100">
+                    <td class="py-2 px-4 border-b w-16">
+  <FormInput
+    :class="{ 'border-red-500': formSubmitted && (!row.sequenceNo || !isNumeric(row.sequenceNo) || row.sequenceNo <= 0 || row.sequenceNo.toString().includes('.')) }"
+    v-model="row.sequenceNo" type="number" class="w-full px-2 py-1 border rounded w-16" />
+  <span
+    v-if="formSubmitted && (!row.sequenceNo || !isNumeric(row.sequenceNo) || row.sequenceNo <= 0 || row.sequenceNo.toString().includes('.'))"
+    class="text-red-500">
+    {{ !row.sequenceNo ? 'Sequence Number is required!' : !isNumeric(row.sequenceNo) ? 'Sequence Number must be a valid number!' : 'Sequence Number must be a whole number greater than 0!' }}
+  </span>
+</td>
                     <td class="py-2 px-4 border-b">
           <!-- Custom searchable dropdown for the "Code" field -->
           <div class="relative">
@@ -2627,6 +2665,7 @@ function formatNumber(value: any) {
               <table class="min-w-full border-collapse">
                 <thead>
                   <tr>
+                    <th class="py-2 px-4 border-b text-left">No.</th>
                     <th class="py-2 px-4 border-b text-left">Code</th>
                     <th class="py-2 px-4 border-b text-left">Percentage</th>
                     <th class="py-2 px-4 border-b text-center">Actions</th>
@@ -2634,6 +2673,16 @@ function formatNumber(value: any) {
                 </thead>
                 <tbody>
                   <tr v-for="(row, index) in editFormData.productRecipe" :key="index" class="hover:bg-gray-100">
+                    <td class="py-2 px-4 border-b w-16">
+  <FormInput
+    :class="{ 'border-red-500': formSubmitted && (!row.sequenceNo || !isNumeric(row.sequenceNo) || row.sequenceNo <= 0 || row.sequenceNo.toString().includes('.')) }"
+    v-model="row.sequenceNo" type="number" class="w-full px-2 py-1 border rounded w-16" />
+  <span
+    v-if="formSubmitted && (!row.sequenceNo || !isNumeric(row.sequenceNo) || row.sequenceNo <= 0 || row.sequenceNo.toString().includes('.'))"
+    class="text-red-500">
+    {{ !row.sequenceNo ? 'Sequence Number is required!' : !isNumeric(row.sequenceNo) ? 'Sequence Number must be a valid number!' : 'Sequence Number must be a whole number greater than 0!' }}
+  </span>
+</td>
                     <td class="py-2 px-4 border-b">
             <!-- Custom searchable dropdown for editFormData -->
             <div class="relative">
